@@ -1,0 +1,87 @@
+# snapcraft.yaml template for core24 / snapcraft 8.x
+# This is a structural reference — replace all placeholder values with real ones.
+
+name: my-app                      # lowercase, hyphens only, max 40 chars
+base: core24                      # always core24
+build-base: core24                # always core24
+version: '0.1.0'                  # semver, or 'git' to derive from git tag
+summary: One-line summary         # max 79 chars
+description: |
+  Multi-line description of what the snap does. Be specific about
+  the use case and key features. Shown in the Snap Store.
+
+grade: stable                     # stable | devel
+confinement: strict               # strict (default) | classic | devmode (testing only)
+
+# --- INTERFACES ---
+# Declare interfaces shared across multiple apps here.
+# Single-app snaps can declare plugs directly under the app instead.
+plugs:
+  network:                        # outbound TCP/UDP
+  home:                           # access $HOME
+
+# --- APPS ---
+# One entry per binary or service exposed by the snap.
+apps:
+  my-app:                         # becomes 'my-app.my-app' or just 'my-app' if name matches
+    command: bin/my-app           # path relative to $SNAP root
+    plugs:
+      - network
+      - home
+    environment:
+      # Set runtime env vars here if the app needs them
+      XDG_CONFIG_HOME: $SNAP_USER_DATA/.config
+
+  # Example daemon (background service):
+  # my-daemon:
+  #   command: bin/my-daemon
+  #   daemon: simple              # simple | forking | oneshot | notify
+  #   restart-condition: always
+  #   plugs:
+  #     - network-bind
+
+# --- LAYOUTS ---
+# Use when the app hardcodes paths outside $SNAP / $SNAP_DATA.
+# layout:
+#   /etc/my-app:
+#     bind: $SNAP_DATA/etc/my-app
+#   /var/lib/my-app:
+#     bind: $SNAP_DATA/var/lib/my-app
+
+# --- PARTS ---
+parts:
+  my-app:
+    # Prefer 'nil' plugin with explicit override-build commands.
+    # Use 'dump' only for pre-built binaries or file-copy snaps.
+    plugin: nil
+    source: .
+
+    # Build-time dependencies (not included in the snap):
+    build-packages:
+      - build-essential
+
+    # Runtime dependencies (bundled in the snap):
+    # stage-packages:
+    #   - libssl3
+
+    override-build: |
+      # Write explicit build + install commands here.
+      # Install everything relative to $SNAPCRAFT_PART_INSTALL.
+      # Examples:
+      #
+      # Go:
+      #   go build -o $SNAPCRAFT_PART_INSTALL/bin/my-app ./cmd/my-app
+      #
+      # Make:
+      #   make
+      #   make install DESTDIR=$SNAPCRAFT_PART_INSTALL PREFIX=/
+      #
+      # Script/no-build:
+      #   install -Dm755 my-script $SNAPCRAFT_PART_INSTALL/bin/my-script
+      #   cp -r share/ $SNAPCRAFT_PART_INSTALL/share/
+
+    # Optionally restrict which files reach the staging area and final snap:
+    # prime:
+    #   - bin/
+    #   - lib/
+    #   - -lib/*.a    # prefix with - to exclude
