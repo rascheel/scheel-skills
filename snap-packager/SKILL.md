@@ -88,7 +88,7 @@ One shell script per required hook. Begin each with `#!/bin/bash` and `set -e`. 
 **`SNAP_PACKAGING.md`**
 Include:
 1. Prerequisites (snapcraft install, LXD or Multipass setup)
-2. Build command (`snapcraft` from the project root)
+2. Build command (`export SNAPCRAFT_BUILD_INFO=1 && snapcraft pack` from the project root)
 3. Install in devmode for first test: `sudo snap install --devmode *.snap`
 4. List every interface that requires manual connection with the exact `snap connect` command
 5. How to switch to strict mode once interfaces are verified
@@ -97,11 +97,12 @@ Include:
 
 ### Step 6: Build and Verify
 
-Run `snapcraft` from the project root and iterate until the build succeeds.
+Run `snapcraft pack` from the project root and iterate until the build succeeds. Always set `SNAPCRAFT_BUILD_INFO=1` so build provenance metadata is embedded in the snap.
 
 ```bash
 cd <project-root>
-snapcraft 2>&1
+export SNAPCRAFT_BUILD_INFO=1
+snapcraft pack 2>&1
 ```
 
 **NEVER use `--destructive-mode`.** That flag builds directly on the host system, bypassing the LXD/Multipass container. It pollutes the host with build dependencies and produces artefacts that may not reproduce cleanly. Always let snapcraft use its default isolated build environment.
@@ -109,7 +110,7 @@ snapcraft 2>&1
 **If the build fails:**
 1. Read the full error output carefully — snapcraft errors are usually precise about the cause.
 2. Fix the issue in the relevant file (`snap/snapcraft.yaml`, a hook, or source).
-3. Run `snapcraft` again. Repeat until the build produces a `.snap` file with no errors.
+3. Run `snapcraft pack` again. Repeat until the build produces a `.snap` file with no errors.
 
 **Common failures and fixes:**
 
@@ -141,3 +142,4 @@ After the build succeeds, summarize in the chat:
 - For daemons: use `daemon: simple` (stays in foreground) or `daemon: forking` (calls fork/daemonizes)
 - Layouts (`layout:`) are the right tool when an app hardcodes paths like `/etc/myapp` or `/var/lib/myapp`
 - Stage packages go in `stage-packages` on the part; build-time-only packages go in `build-packages`
+- **Prefer `build-packages`/`stage-packages` over `build-snaps`/`stage-snaps`** — automatic CVE reporting works correctly only when dependencies come from `stage-packages` (combined with `SNAPCRAFT_BUILD_INFO=1`). Use `build-snaps`/`stage-snaps` only when a dependency is unavailable as a Debian package or must come from a specific snap (e.g., a snap SDK or a content-sharing snap provider)
