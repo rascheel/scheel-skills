@@ -68,9 +68,9 @@ apps:
 
 ## Parts Section
 
-### nil Plugin (PREFERRED)
+### nil Plugin
 
-Use when you need explicit control over the build. Write all build steps yourself in `override-build`.
+Use when the build is custom enough that a language plugin would require contortions — multi-step pipelines, vendored toolchains, non-standard install layouts. Write all build steps yourself in `override-build`.
 
 ```yaml
 parts:
@@ -123,7 +123,9 @@ parts:
       - lib/
 ```
 
-### Language Plugins (use only when nil is impractical)
+### Language Plugins
+
+Prefer these when the project's build fits the plugin's conventions — they handle toolchain setup, environment variables, and install paths with less yaml than a hand-written `nil` build.
 
 **go:**
 ```yaml

@@ -5,7 +5,8 @@ description: >
   snap, including snapcraft.yaml targeting core24 and snapcraft 8.x, lifecycle hooks, and
   interface declarations. Writes output files directly to disk and produces a SNAP_PACKAGING.md
   guide documenting how to build, install, and test the snap and which connectors must be enabled.
-  Prefers nil plugin with custom build overrides; uses dump for file-only snaps.
+  Uses snap language plugins (go, python, npm, cmake, meson) when they fit, the nil plugin for
+  custom builds, and dump for file-only snaps.
   WHEN: package as snap, create snapcraft.yaml, snap this application, snap packaging,
   convert to snap, create snap, add snap support, snap confinement, snapcraft configuration,
   snap interfaces, snap hooks, snap build, package with snapcraft, core24 snap, snapcraft 8,
@@ -51,11 +52,11 @@ Record findings for each section of the checklist:
 
 **Grade:** Use `stable` for production-ready apps, `devel` for work-in-progress.
 
-**Plugin strategy (most important rule):**
-- **Prefer `nil` plugin** with `override-build` for any app that requires build steps
-- **Use `dump`** for apps that only need files copied into the snap (pre-built binaries, scripts)
-- Use language-specific plugins (`python`, `go`, `node`, `cmake`, `meson`) only when `nil` would require an unreasonable amount of manual shell work
-- When using `nil`, write explicit shell commands in `override-build` so the build is transparent and auditable
+**Plugin strategy:**
+- **Use language-specific plugins** (`go`, `python`, `npm`, `cmake`, `meson`, `rust`, etc.) when the project's build fits the plugin's expected shape — they handle toolchain setup, environment, and install paths for you with less yaml. When extra steps are needed after the plugin's normal build (e.g. fetching assets, compiling grammars, copying a runtime directory), add `override-build` that calls `craftctl default` first and then appends the extra steps — do not switch to `nil` just because there are post-build steps.
+- **Use `nil` with `override-build`** when the build is reasonably custom: the core build itself doesn't fit the plugin (e.g. a vendored toolchain, a multi-stage pipeline the plugin can't model, or a non-standard build system). Don't fight a plugin to make it fit — explicit shell in `override-build` is fine.
+- **Use `dump`** for apps that only need files copied into the snap (pre-built binaries, scripts).
+- When using `nil`, write explicit shell commands in `override-build` so the build is transparent and auditable.
 
 Consult `references/snapcraft-core24-reference.md` for field reference and plugin syntax.
 
@@ -136,7 +137,7 @@ After the build succeeds, summarize in the chat:
 ## Key Rules
 
 - Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
-- Prefer `nil` plugin with `override-build`; use `dump` for file-copy-only snaps
+- Use language plugins (`go`, `python`, `npm`, `cmake`, `meson`, etc.) when the build fits them; reach for `nil` with `override-build` when the build is custom; use `dump` for file-copy-only snaps
 - Set `confinement: strict` by default
 - If the app has multiple binaries or services, model each as a separate entry under `apps`
 - For daemons: use `daemon: simple` (stays in foreground) or `daemon: forking` (calls fork/daemonizes)

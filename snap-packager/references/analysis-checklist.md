@@ -7,30 +7,53 @@ Work through each section. Record findings — they drive every decision in snap
 ## 1. Language and Runtime
 
 - [ ] `go.mod` / `go.sum` present? → Go application
-- [ ] `setup.py`, `pyproject.toml`, `requirements.txt`, or `*.py` entry point? → Python application
+- [ ] `setup.py`, `pyproject.toml`, `requirements.txt`, or `*.py` entry point? → Python application (`plugin: python`; or `plugin: uv` if `uv.lock` is present, `plugin: poetry` if `[tool.poetry]` in pyproject.toml)
 - [ ] `package.json`? → Node.js application
 - [ ] `Cargo.toml`? → Rust application
 - [ ] `Makefile`, `CMakeLists.txt`, or `meson.build`? → C/C++ application
+- [ ] `configure.ac`, `Makefile.am`, `autogen.sh`, or `bootstrap`? → C/C++ autotools project
+- [ ] `*.pro` file? → Qt/qmake application
+- [ ] `pom.xml`? → Java/Maven application
+- [ ] `build.gradle` or `build.gradle.kts`? → Java/Kotlin Gradle application
+- [ ] `build.xml`? → Java Ant application
+- [ ] `Gemfile` or `*.gemspec`? → Ruby application
+- [ ] `SConstruct` or `SConscript`? → SCons build
+- [ ] `*.csproj`, `*.fsproj`, or `*.sln`? → .NET/C# application
+- [ ] `pubspec.yaml`? → Flutter/Dart application
 - [ ] Pre-compiled binary already in repo? → `dump` plugin candidate
-- [ ] Shell scripts only, no build step? → `nil` plugin, `override-build` copies files
+- [ ] Shell scripts only, no build step? → `dump` plugin (or `nil` with `cp` in `override-build` if files need transformation)
 - [ ] What runtime version is required? (`.python-version`, `.nvmrc`, `go.mod go 1.X`, etc.)
 
 ---
 
 ## 2. Build System
 
-Determine build steps so you can write `override-build`:
+Pick the plugin that fits the project's build. Either reach for the language plugin or write `override-build` with `nil` — whichever is cleaner for the codebase at hand:
 
-- [ ] `Makefile` → `make && make install DESTDIR=$SNAPCRAFT_PART_INSTALL`
-- [ ] `CMakeLists.txt` → `cmake -B build && cmake --build build && cmake --install build --prefix /`
-- [ ] `meson.build` → `meson setup build && meson compile -C build && meson install -C build`
-- [ ] `setup.py` / `pyproject.toml` → `pip install . --prefix=$SNAPCRAFT_PART_INSTALL`
-- [ ] `go.mod` → `go build -o $SNAPCRAFT_PART_INSTALL/bin/<name> ./...`
-- [ ] `Cargo.toml` → `cargo build --release && install -Dm755 target/release/<name> $SNAPCRAFT_PART_INSTALL/bin/<name>`
-- [ ] Pre-compiled binary → `dump` plugin with `source: .`
-- [ ] No build (scripts only) → `nil` plugin, `override-build` with `cp` commands
+| Build system | Language plugin | `nil` + `override-build` equivalent |
+|---|---|---|
+| `go.mod` | `plugin: go` | `go build -o $SNAPCRAFT_PART_INSTALL/bin/<name> ./...` |
+| `setup.py` / `pyproject.toml` | `plugin: python` | `pip install . --prefix=$SNAPCRAFT_PART_INSTALL` |
+| `pyproject.toml` (Poetry) | `plugin: poetry` (use `poetry-with` to include extra dependency groups) | `poetry export -f requirements.txt -o req.txt && pip install -r req.txt --prefix=$SNAPCRAFT_PART_INSTALL` |
+| `uv.lock` (uv) | `plugin: uv` (installs venv directly into `$CRAFT_PART_INSTALL`; `UV_FROZEN=true` by default) | `uv sync --frozen && cp -r .venv $SNAPCRAFT_PART_INSTALL/` |
+| `package.json` | `plugin: npm` | `npm ci && npm run build && cp -r dist $SNAPCRAFT_PART_INSTALL/...` |
+| `Cargo.toml` | `plugin: rust` | `cargo build --release && install -Dm755 target/release/<name> $SNAPCRAFT_PART_INSTALL/bin/<name>` |
+| `CMakeLists.txt` | `plugin: cmake` | `cmake -B build && cmake --build build && cmake --install build --prefix /` |
+| `meson.build` | `plugin: meson` | `meson setup build && meson compile -C build && meson install -C build` |
+| `Makefile` | `plugin: make` (requires `install` target + `DESTDIR` support) | `make && make install DESTDIR=$SNAPCRAFT_PART_INSTALL PREFIX=/` |
+| `configure.ac` / `autogen.sh` | `plugin: autotools` (provides autoconf, automake, libtool) | `./configure && make && make install DESTDIR=$SNAPCRAFT_PART_INSTALL` |
+| `*.pro` (Qt) | `plugin: qmake` (default Qt 5; set `qmake-major-version: 6` for Qt 6) | `qmake && make && make install DESTDIR=$SNAPCRAFT_PART_INSTALL` |
+| `pom.xml` (Maven) | `plugin: maven` (add `maven` to `build-packages`; stage `default-jre-headless`; use `maven-use-wrapper: true` if project has `mvnw`) | `mvn package && install -Dm644 target/*.jar $SNAPCRAFT_PART_INSTALL/jar/` |
+| `build.gradle` (Gradle) | `plugin: gradle` (stage `default-jre-headless`) | `gradle build && install -Dm644 build/libs/*.jar $SNAPCRAFT_PART_INSTALL/jar/` |
+| `build.xml` (Ant) | `plugin: ant` (stage `default-jre-headless`; add `ant` to `build-packages`) | `ant && install -Dm644 *.jar $SNAPCRAFT_PART_INSTALL/jar/` |
+| `Gemfile` (Ruby) | `plugin: ruby` (set `ruby-version`; optionally `ruby-use-bundler: true`) | `bundle install --path $SNAPCRAFT_PART_INSTALL` |
+| `SConstruct` / `SConscript` | `plugin: scons` (add `scons` to `build-packages`) | `scons && scons install DESTDIR=$SNAPCRAFT_PART_INSTALL` |
+| `*.csproj` / `*.sln` (.NET) | `plugin: dotnet` (provide `dotnet-sdk` snap or `dotnet8` build-package) | `dotnet publish -c Release -o $SNAPCRAFT_PART_INSTALL/bin` |
+| `pubspec.yaml` (Flutter) | `plugin: flutter` (pulls Flutter from GitHub; set `flutter-channel`; defaults to `lib/main.dart` entry point) | n/a |
+| Pre-compiled binary | (none — use `dump`) | n/a |
+| Shell scripts only | (none — use `dump` or `nil`) | `install -Dm755 *.sh $SNAPCRAFT_PART_INSTALL/bin/` |
 
-**Always prefer `nil` plugin and write explicit shell commands in `override-build` over using language-specific plugins.**
+**Default to the language plugin when the project's build fits its conventions.** It handles toolchain setup, env vars, and install paths with less yaml. Switch to `nil` with `override-build` when the build is custom — multi-step pipelines, vendored toolchains, non-standard install layouts, or anything the plugin can't express cleanly. Don't contort yaml to fit a plugin when explicit shell would be clearer.
 
 ---
 
