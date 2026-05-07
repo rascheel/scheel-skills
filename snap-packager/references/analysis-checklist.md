@@ -67,6 +67,26 @@ Pick the plugin that fits the project's build. Either reach for the language plu
 
 ---
 
+## 3a. Confinement Decision
+
+Answer these before choosing `strict` vs `classic`. Default to `strict` — only escalate to `classic` if one of the classic signals below is clearly present.
+
+**Classic confinement signals (if any apply, use `classic`):**
+- [ ] Does the app spawn **arbitrary host executables** from the user's `PATH` that are unknown at packaging time? (e.g. a text editor calling language servers like `rust-analyzer`, `clangd`, `pyright`; a shell exec-ing user commands; a build tool invoking the user's compiler)
+- [ ] Is it a **shell or terminal multiplexer**? (bash, zsh, fish, tmux, screen — must exec arbitrary host programs)
+- [ ] Is it a **developer toolchain** — compiler, linker, build system, debugger, or REPL — that chains arbitrary host tools?
+- [ ] Is it a **package manager** or **CI runner** that must read/write arbitrary filesystem paths not predictable at packaging time?
+- [ ] Does the README or documentation explicitly say it integrates with tools the user installs separately on their system?
+
+**Strict confinement is fine when:**
+- The app only accesses files the user explicitly opens (image editors, document editors, media players)
+- External integrations go through well-defined interfaces (network, D-Bus, audio)
+- Any companion tools can be bundled in the snap or accessed via a content snap
+
+> **Note:** Classic snaps require manual review and approval by the Snap Store team before distribution. Always note this requirement in `SNAP_PACKAGING.md` when using `classic`.
+
+---
+
 ## 4. Service / Daemon Detection
 
 - [ ] Systemd unit file (`*.service`) present in repo?

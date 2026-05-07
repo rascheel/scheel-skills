@@ -48,7 +48,23 @@ Record findings for each section of the checklist:
 
 ### Step 2: Plan the Snap
 
-**Confinement:** Default to `strict`. Use `classic` only when the app fundamentally cannot work without unrestricted filesystem access (e.g., a shell, developer toolchain, or IDE). Never use `devmode` in final output files — it is a testing-only aid.
+**Confinement:** Default to `strict`. Use `classic` only when the app genuinely cannot function within the interface system. Never use `devmode` in final output files — it is a testing-only aid.
+
+The primary signal for `classic` is: **does the app need to invoke arbitrary executables from the host's PATH that cannot be known at packaging time?** This is fundamentally different from filesystem access (which interfaces like `home` and `removable-media` can grant). Examples that legitimately require classic:
+
+| App type | Why classic is needed |
+|---|---|
+| Text editors / IDEs (vim, helix, emacs) | Spawn language servers, formatters, linters the user installs (e.g. `rust-analyzer`, `clangd`, `prettier`) — these are arbitrary host binaries |
+| Shells (bash, zsh, fish) | Must exec arbitrary host commands |
+| Developer toolchains (compilers, build systems) | Chain arbitrary host tools; write to arbitrary paths |
+| Debuggers (gdb, lldb) | `ptrace` + need to find host debuginfo |
+| Terminal multiplexers (tmux, screen) | Spawn arbitrary shells and host programs |
+| Package managers | Read/write arbitrary filesystem paths |
+| CI/CD runners | Execute arbitrary pipelines |
+
+Strict confinement *can* work even for apps that look complex — image editors, media players, and file managers all work strictly because their external interactions go through well-defined interfaces. Don't reach for classic just because an app is large or has many features.
+
+Classic snaps require **manual review and approval by the Snap Store team** before they can be distributed. This is not automatic. Factor this in and note it in `SNAP_PACKAGING.md`.
 
 **Grade:** Use `stable` for production-ready apps, `devel` for work-in-progress.
 
