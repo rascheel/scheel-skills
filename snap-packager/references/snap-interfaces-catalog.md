@@ -21,6 +21,8 @@ Each entry lists: the interface name, what it grants, detection signals, and whe
 | `network-setup-control` | Modify netplan configuration | Netplan writers, network provisioning tools | MC |
 | `firewall-control` | nftables / iptables writes | nftables, `iptables -A`, firewall management | MC |
 
+> **`network-bind` port restriction:** Strict-confinement snaps cannot bind to ports below 1024. This is a Linux kernel restriction (`CAP_NET_BIND_SERVICE`) — snap does not permit ambient capabilities, so there is no workaround within strict confinement. When packaging a server or daemon, always configure it to listen on a port ≥ 1024 (e.g. 8080 instead of 80, 8443 instead of 443). If the upstream default config hardcodes a privileged port, ship a patched config file or override the port in a wrapper script or `install` hook.
+
 ---
 
 ## Filesystem

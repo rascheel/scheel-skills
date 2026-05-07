@@ -17,6 +17,24 @@ All hooks:
 
 **When NOT to add:** The app handles its own first-run setup internally (creates its own dirs/config on startup). Most well-written apps don't need this hook.
 
+**Daemon config seeding pattern:** For server/daemon apps whose upstream default config hardcodes privileged ports or absolute paths incompatible with strict confinement, always seed a corrected config into `$SNAP_COMMON` (or `$SNAP_DATA`) from the `install` hook rather than copying the upstream default verbatim. The daemon wrapper should point at `$SNAP_COMMON` so the user can freely edit the config after install without the snap overwriting it on refresh.
+
+```bash
+#!/bin/bash
+set -e
+
+# Seed corrected config on first install only — never overwrite user edits.
+# Upstream default listens on port 80 which strict confinement cannot bind;
+# rewrite to 8080 here.
+if [ ! -f "$SNAP_COMMON/conf/nginx.conf" ]; then
+    mkdir -p "$SNAP_COMMON/conf" "$SNAP_COMMON/logs" "$SNAP_COMMON/html"
+    sed 's/listen  *80;/listen 8080;/' \
+        "$SNAP/usr/local/nginx/conf/nginx.conf" \
+        > "$SNAP_COMMON/conf/nginx.conf"
+    cp -r "$SNAP/usr/local/nginx/html/." "$SNAP_COMMON/html/"
+fi
+```
+
 ```bash
 #!/bin/bash
 set -e
