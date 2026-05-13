@@ -1,5 +1,5 @@
 ---
-name: snap-validation-auto-tester
+name: snap-validator
 description: >
   Validates snap packages by provisioning a clean LXD container, installing the snap with
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
@@ -23,7 +23,7 @@ metadata:
     - validation
 ---
 
-# Snap Validation Auto-Tester
+# Snap Validator
 
 Provisions a clean LXD container, installs the locally built snap, exercises every declared
 app and daemon, captures AppArmor/SecComp denials with `snappy-debug`, and adds only the

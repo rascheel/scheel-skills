@@ -1,7 +1,7 @@
 ---
 name: snap-orchestrator
 description: >
-  Coordinates snap-analyzer, snap-packager, and snap-validation-auto-tester as sequential
+  Coordinates snap-analyzer, snap-packager, and snap-validator as sequential
   sub-agents to take a project from source code to a validated, installable snap with correct
   interfaces. Manages the full pipeline: analyze → package → validate → patch → rebuild,
   looping the validate/patch/rebuild cycle until the snap runs clean or a maximum iteration
@@ -38,8 +38,8 @@ The sub-agents communicate exclusively through these files in the project root:
 | File | Written by | Read by | Purpose |
 |---|---|---|---|
 | `snap-analysis.json` | snap-analyzer | snap-packager | Full packaging specification |
-| `snap/snapcraft.yaml` | snap-packager | snap-validation-auto-tester, snap-packager (patch) | Snap manifest |
-| `snap-validation-results.json` | snap-validation-auto-tester | snap-packager (patch), orchestrator | Denial report |
+| `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest |
+| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report |
 
 ---
 
@@ -107,7 +107,7 @@ Maximum iterations: **5**. Track the current iteration count.
 rm -f snap-validation-results.json
 ```
 
-### 3.2 Delegate to: `snap-validation-auto-tester`
+### 3.2 Delegate to: `snap-validator`
 
 Provide this context to the sub-agent:
 - The `.snap` file in the project root is the target
@@ -176,7 +176,7 @@ If the loop hit the 5-iteration limit, list the remaining entries from the final
 
 1. Run `snap run --shell <snap-name>.<app>` and reproduce the failure manually
 2. Check `journalctl -xe | grep -i apparmor` for additional context
-3. Consult `snap-validation-auto-tester`'s `references/denial-to-interface.md`
+3. Consult `snap-validator`'s `references/denial-to-interface.md`
 
 ---
 
@@ -186,7 +186,7 @@ If the loop hit the 5-iteration limit, list the remaining entries from the final
 |---|---|
 | snap-analyzer fails or produces invalid JSON | Stop; show the error; ask user to check the project |
 | snap-packager build fails after 3 rebuild attempts | Stop; show the last `snapcraft pack` error output |
-| snap-validation-auto-tester fails to write results | Stop; show the error; suggest running it standalone |
-| LXD container creation fails | Let snap-validation-auto-tester handle the retry logic |
+| snap-validator fails to write results | Stop; show the error; suggest running it standalone |
+| LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement detected after Phase 1 | Skip Phases 3–4; note in final report that validation was skipped |
 | `.snap` file missing after snap-packager runs | Stop; show the last build output |
