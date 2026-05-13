@@ -78,8 +78,11 @@ Provide this context to the sub-agent:
 
 Wait until `snap-analysis.json` is present and contains valid JSON before continuing.
 
-If `snap-analysis.json` reports `"confinement": "classic"`, skip Phases 3–4 (validation
-does not apply to classic snaps) and proceed directly to Phase 5, noting the skip.
+If `snap-analysis.json` reports `"confinement": "classic"`, the user has already been
+prompted and confirmed classic confinement during the analysis phase. Skip Phases 3–4
+(validation does not apply to classic snaps) and proceed directly to Phase 5, noting the
+skip and reminding the user of the Store approval requirement and Ubuntu Core
+incompatibility.
 
 ---
 
@@ -188,5 +191,5 @@ If the loop hit the 5-iteration limit, list the remaining entries from the final
 | snap-packager build fails after 3 rebuild attempts | Stop; show the last `snapcraft pack` error output |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
 | LXD container creation fails | Let snap-validator handle the retry logic |
-| Classic confinement detected after Phase 1 | Skip Phases 3–4; note in final report that validation was skipped |
+| Classic confinement confirmed after Phase 1 | Skip Phases 3–4; remind user of Store approval requirement and Ubuntu Core incompatibility in final report |
 | `.snap` file missing after snap-packager runs | Stop; show the last build output |

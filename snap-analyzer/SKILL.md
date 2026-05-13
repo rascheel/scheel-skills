@@ -53,19 +53,44 @@ Record findings for:
 
 ## Step 2: Determine Confinement
 
-Default to `strict`. Use `classic` **only** when the app genuinely cannot operate within
-the snap interface system. The primary signal is: **does the app need to exec arbitrary
-host binaries that cannot be known at packaging time?**
+**Always default to `strict` confinement.** Classic confinement must only be considered
+when the app genuinely cannot operate within the snap interface system even after interfaces
+are applied. The primary signal is: **does the app need to exec arbitrary host binaries
+that cannot be known at packaging time?**
 
-| App type | Classic needed |
+| App type | Classic potentially needed |
 |---|---|
 | Text editors / IDEs, shells, debuggers, terminal multiplexers | Yes — spawn arbitrary host programs |
 | Compiler/toolchain, build systems, package managers | Yes — arbitrary host paths and tools |
 | CI/CD runners | Yes — arbitrary pipelines |
 | Image editors, media players, file managers, network tools | No — strict + interfaces is sufficient |
 
-> Classic snaps require **manual Snap Store review** before distribution. Record this in
-> `notes` if classic is chosen.
+### If classic confinement appears necessary
+
+Before recording `"confinement": "classic"` in the output, **stop and ask the user**
+whether they want to proceed with classic confinement. Frame the question with these
+caveats:
+
+> ⚠️ **Classic confinement has significant restrictions:**
+>
+> 1. **Snap Store approval required** — Classic snaps must be manually reviewed and
+>    approved by the Snap Store team before they can be distributed. This process takes
+>    on average **3–5 business days** and approval is not guaranteed.
+>    See: https://documentation.ubuntu.com/snapcraft/latest/how-to/crafting/enable-classic-confinement/#request-classic-confinement-on-the-snap-store
+>
+> 2. **Not supported on Ubuntu Core** — Classic confinement is incompatible with Ubuntu
+>    Core devices (e.g. IoT/embedded targets). If this snap may ever run on Ubuntu Core,
+>    classic confinement is not a viable option.
+>    See: https://forum.snapcraft.io/t/building-classic-snap-on-ubuntu-core/4243
+>
+> **Recommendation:** Use `strict` confinement with the appropriate interfaces where
+> possible. Would you like to proceed with classic confinement, or continue with strict?
+
+If the user chooses **strict**, record `"confinement": "strict"` and continue with
+interface mapping (Step 4) to cover the app's requirements.
+
+If the user explicitly confirms **classic**, record `"confinement": "classic"` and add
+both caveats above to `notes`.
 
 Set `grade: stable` for production-ready apps, `devel` for work-in-progress.
 
