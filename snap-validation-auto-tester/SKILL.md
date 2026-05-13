@@ -128,39 +128,39 @@ suggestion — it maps common denial patterns to the correct snap interface.
 
 ---
 
-## Step 4: Iterative Patching
+## Step 4: Write Results
 
-**Rule:** Only add plugs based on actual triggered denials. Never infer from source code.
+### 4.1 Map each denial to its app
 
-### 4.1 Map denial to app
+Identify which `apps:` entry in `snapcraft.yaml` caused each denial.
 
-Identify which `apps:` entry in `snapcraft.yaml` caused the denial.
+### 4.2 Write snap-validation-results.json
 
-### 4.2 Patch snapcraft.yaml
+Write `snap-validation-results.json` to the project root using this schema:
 
-Edit `snapcraft.yaml` directly to add the suggested plug to the identified app entry:
-
-- Locate the `apps.<app-name>` section.
-- If a `plugs:` list already exists, append the new plug name (skip if already present).
-- If no `plugs:` key exists, add `plugs:` with the new plug as its first item.
-- Preserve all existing comments and formatting in the file.
-- This operation is idempotent — do not add a plug that is already listed.
-
-### 4.3 Rebuild and retest automatically
-
-After patching `snapcraft.yaml`, immediately rebuild and retest without user intervention:
-
-```bash
-# Rebuild the snap
-snapcraft
-
-# Identify the newly produced .snap file
-ls -t *.snap | head -1
+```json
+{
+  "schema_version": "1.0",
+  "snap_name": "<name>",
+  "confinement": "<confinement>",
+  "clean": false,
+  "denials": [
+    {
+      "app": "<app-name>",
+      "interface_suggestion": "<plug-name>",
+      "raw_denial": "<full AppArmor/SecComp log line>"
+    }
+  ]
+}
 ```
 
-Then repeat the Step 2 install sequence (reuse the existing container or recreate it) and
-re-run **only the apps that had denials**. Repeat Steps 3–4 until a full pass produces zero
-new AppArmor/SecComp denials.
+- Set `"clean": true` and `"denials": []` when no denials were found.
+- Set `"interface_suggestion"` to the plug name from snappy-debug, or look up the denial
+  in `references/denial-to-interface.md` if snappy-debug gives no suggestion.
+- Write one denial object per unique `(app, interface_suggestion)` pair — deduplicate.
+
+**Do not patch `snapcraft.yaml` or rebuild the snap.** The caller (or the
+`snap-orchestrator` skill) is responsible for acting on the results.
 
 ---
 
@@ -168,12 +168,12 @@ new AppArmor/SecComp denials.
 
 ### 5.1 Confirm clean run
 
-The session is complete when all apps and daemons finish their exercise without producing
-new AppArmor/SecComp denials in `snappy-debug`.
+A clean run is when all apps and daemons finish without producing any AppArmor/SecComp
+denials. `snap-validation-results.json` will have `"clean": true`.
 
 ### 5.2 Present summary table
 
-| App / Daemon | Denials Found | Plugs Added |
+| App / Daemon | Denials Found | Plugs Suggested |
 |---|---|---|
 | `<app-name>` | `<denial or "None">` | `<plug(s) or "None">` |
 
@@ -191,7 +191,7 @@ lxc delete --force snap-test-env
 
 | Situation | Action |
 |---|---|
-| No `.snap` file found | Ask user to build first: `snapcraft` |
+| No `.snap` file found | Write `snap-validation-results.json` with `"clean": false` and a note in `denials`; stop |
 | LXD not installed or unavailable | Stop: "lxc is not available on this system" |
 | `snap install` fails | Report exact error; do not continue |
 | Denial with no snappy-debug suggestion | Read `references/denial-to-interface.md` |

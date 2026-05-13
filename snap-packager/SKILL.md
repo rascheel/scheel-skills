@@ -37,6 +37,10 @@ Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
 
 ## Workflow
 
+> **Patch mode:** If `snap-validation-results.json` is present in the project root with
+> `"clean": false`, skip to **Step 2b** — patch `snap/snapcraft.yaml` based on the denial
+> list and then rebuild. Steps 1 and 2a are only needed for the initial packaging run.
+
 ### Step 1: Read snap-analysis.json
 
 Read `snap-analysis.json` from the project root. All decisions about language, plugin,
@@ -64,7 +68,7 @@ by the `snap-analyzer` skill and recorded in `snap-analysis.json`. Do not second
 Consult `references/snapcraft-core24-reference.md` for field syntax when translating the
 analysis into YAML.
 
-### Step 2: Write Files to Disk
+### Step 2a: Write Files to Disk (initial mode)
 
 Write all files. Do not show drafts and ask for approval — write directly.
 
@@ -92,6 +96,18 @@ Include:
 6. How to submit to the Snap Store (optional, if the app looks store-ready)
 7. Common troubleshooting (AppArmor denials via `snap run --shell`, `journalctl -xe`)
 8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
+
+### Step 2b: Patch snapcraft.yaml (patch mode)
+
+Read `snap-validation-results.json`. For each entry in `denials[]`:
+
+1. Open `snap/snapcraft.yaml` and locate the `apps.<app-name>` section.
+2. If a `plugs:` list exists, append `interface_suggestion` (skip if already present).
+3. If no `plugs:` key exists, add `plugs:` with the new plug as its first item.
+4. Preserve all existing comments and formatting — this is an in-place surgical edit.
+5. This operation is idempotent — never duplicate a plug already listed.
+
+After patching, proceed directly to **Step 3** to rebuild.
 
 ### Step 3: Build and Verify
 
