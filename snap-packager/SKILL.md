@@ -1,21 +1,19 @@
 ---
 name: snap-packager
 description: >
-  Analyzes an existing application codebase and generates all files needed to package it as a
-  snap, including snapcraft.yaml targeting core24 and snapcraft 8.x, lifecycle hooks, and
-  interface declarations. Writes output files directly to disk and produces a SNAP_PACKAGING.md
-  guide documenting how to build, install, and test the snap and which connectors must be enabled.
-  Uses snap language plugins (go, python, npm, cmake, meson) when they fit, the nil plugin for
-  custom builds, and dump for file-only snaps.
-  WHEN: package as snap, create snapcraft.yaml, snap this application, snap packaging,
+  Reads a snap-analysis.json file produced by the snap-analyzer skill and generates all files
+  needed to package the application as a snap: snapcraft.yaml targeting core24 and snapcraft 8.x,
+  lifecycle hooks, and a SNAP_PACKAGING.md guide documenting how to build, install, and test the
+  snap and which connectors must be enabled. Runs snapcraft pack and iterates until the build
+  succeeds. WHEN: package as snap, create snapcraft.yaml, snap this application, snap packaging,
   convert to snap, create snap, add snap support, snap confinement, snapcraft configuration,
   snap interfaces, snap hooks, snap build, package with snapcraft, core24 snap, snapcraft 8,
-  make a snap, write snapcraft yaml, snap containerize.
+  make a snap, write snapcraft yaml, snap containerize, generate snap files.
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
   version: "1.0.0"
-  summary: "Generates snapcraft.yaml, lifecycle hooks, and a packaging guide for any app, targeting core24/snapcraft 8.x."
+  summary: "Reads snap-analysis.json and generates snapcraft.yaml, lifecycle hooks, and a packaging guide, then builds the snap."
   tags:
     - snap
     - snapcraft
@@ -29,90 +27,73 @@ metadata:
 
 ## Overview
 
-Analyzes a codebase and writes everything needed to package it as a snap:
+Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
 - `snap/snapcraft.yaml` — the snap manifest (core24, snapcraft 8.x)
-- `snap/hooks/<hook>` — lifecycle hooks (only when the app has real lifecycle requirements)
+- `snap/hooks/<hook>` — lifecycle hooks (only those listed in the analysis)
 - `SNAP_PACKAGING.md` — build instructions, interface connection commands, and testing guide
+
+> If `snap-analysis.json` is not present, stop and instruct the user to run the
+> `snap-analyzer` skill first.
 
 ## Workflow
 
-### Step 1: Analyze the Codebase
+### Step 1: Read snap-analysis.json
 
-Read `references/analysis-checklist.md` and work through it systematically. Do not ask the user for information that can be inferred from files — inspect `Makefile`, `go.mod`, `package.json`, `*.service` files, source imports, and README before asking anything.
+Read `snap-analysis.json` from the project root. All decisions about language, plugin,
+confinement, interfaces, hooks, and layouts come from this file — do not re-inspect the
+source code. The fields are:
 
-Record findings for each section of the checklist:
-- Language/runtime and build system
-- Entry points (binary names, scripts, services)
-- App type: daemon, desktop GUI, CLI, or multiple
-- System resources accessed (network, filesystem, devices, audio, D-Bus, etc.)
-
-### Step 2: Plan the Snap
-
-**Confinement:** Default to `strict`. Use `classic` only when the app genuinely cannot function within the interface system. Never use `devmode` in final output files — it is a testing-only aid.
-
-The primary signal for `classic` is: **does the app need to invoke arbitrary executables from the host's PATH that cannot be known at packaging time?** This is fundamentally different from filesystem access (which interfaces like `home` and `removable-media` can grant). Examples that legitimately require classic:
-
-| App type | Why classic is needed |
+| Field | Meaning |
 |---|---|
-| Text editors / IDEs (vim, helix, emacs) | Spawn language servers, formatters, linters the user installs (e.g. `rust-analyzer`, `clangd`, `prettier`) — these are arbitrary host binaries |
-| Shells (bash, zsh, fish) | Must exec arbitrary host commands |
-| Developer toolchains (compilers, build systems) | Chain arbitrary host tools; write to arbitrary paths |
-| Debuggers (gdb, lldb) | `ptrace` + need to find host debuginfo |
-| Terminal multiplexers (tmux, screen) | Spawn arbitrary shells and host programs |
-| Package managers | Read/write arbitrary filesystem paths |
-| CI/CD runners | Execute arbitrary pipelines |
+| `project.*` | Snap name, version, summary, description, license, grade |
+| `snap.base` | Always `core24` |
+| `snap.confinement` | `strict` or `classic` |
+| `build.plugin` | Snapcraft plugin to use |
+| `build.plugin_config` | Plugin-specific keys to merge into the `parts` entry |
+| `build.build_packages` / `build.stage_packages` | Dependency lists |
+| `build.override_build_extra` | Extra shell commands to append after `craftctl default` (null if none) |
+| `apps[]` | Each app/daemon: name, command, daemon type, plugs, environment |
+| `hooks[]` | Hook names to generate |
+| `layouts` | Path remapping entries |
+| `interfaces[].auto_connected` | Drives whether a `snap connect` command appears in SNAP_PACKAGING.md |
+| `notes[]` | Caveats to surface in the chat summary and SNAP_PACKAGING.md |
 
-Strict confinement *can* work even for apps that look complex — image editors, media players, and file managers all work strictly because their external interactions go through well-defined interfaces. Don't reach for classic just because an app is large or has many features.
+All decisions about confinement, plugin choice, interfaces, and hooks have already been made
+by the `snap-analyzer` skill and recorded in `snap-analysis.json`. Do not second-guess them.
 
-Classic snaps require **manual review and approval by the Snap Store team** before they can be distributed. This is not automatic. Factor this in and note it in `SNAP_PACKAGING.md`.
+Consult `references/snapcraft-core24-reference.md` for field syntax when translating the
+analysis into YAML.
 
-**Grade:** Use `stable` for production-ready apps, `devel` for work-in-progress.
-
-**Plugin strategy:**
-- **Use language-specific plugins** (`go`, `python`, `npm`, `cmake`, `meson`, `rust`, etc.) when the project's build fits the plugin's expected shape — they handle toolchain setup, environment, and install paths for you with less yaml. When extra steps are needed after the plugin's normal build (e.g. fetching assets, compiling grammars, copying a runtime directory), add `override-build` that calls `craftctl default` first and then appends the extra steps — do not switch to `nil` just because there are post-build steps.
-- **Use `nil` with `override-build`** when the build is reasonably custom: the core build itself doesn't fit the plugin (e.g. a vendored toolchain, a multi-stage pipeline the plugin can't model, or a non-standard build system). Don't fight a plugin to make it fit — explicit shell in `override-build` is fine.
-- **Use `dump`** for apps that only need files copied into the snap (pre-built binaries, scripts).
-- When using `nil`, write explicit shell commands in `override-build` so the build is transparent and auditable.
-
-Consult `references/snapcraft-core24-reference.md` for field reference and plugin syntax.
-
-### Step 3: Map Interfaces
-
-For each system resource identified in Step 1, find the corresponding snap interface.
-
-Consult `references/snap-interfaces-catalog.md`. For each interface:
-- Add it to the relevant `apps` entry under `plugs` (or top-level `plugs` if shared across apps)
-- Note whether it is auto-connected or requires a manual `snap connect` — this drives the packaging guide
-
-### Step 4: Determine Hooks
-
-Consult `references/snap-hooks-reference.md`. Add hooks only when genuinely needed:
-- `install` — first-run setup (create dirs, write initial config, set defaults)
-- `configure` — respond to `snap set` option changes
-- `connect-plug-*` / `disconnect-plug-*` — react to interface connect/disconnect events
-- `pre-refresh` / `post-refresh` — handle state migration around snap updates
-
-### Step 5: Write Files to Disk
+### Step 2: Write Files to Disk
 
 Write all files. Do not show drafts and ask for approval — write directly.
 
 **`snap/snapcraft.yaml`**
-Complete snap manifest. Use `assets/snapcraft.yaml.template` for structural reference. Fill every field based on actual analysis — do not leave placeholder comments.
+Complete snap manifest. Use `assets/snapcraft.yaml.template` for structural reference.
+Translate every field from `snap-analysis.json` — do not leave placeholder comments.
+
+- If `build.override_build_extra` is non-null, emit an `override-build` that starts with
+  `craftctl default` followed by the extra commands.
+- Merge `build.plugin_config` keys directly into the part's YAML fields.
+- Emit `apps[].environment` entries only when the environment map is non-empty.
 
 **`snap/hooks/<hook-name>`**
-One shell script per required hook. Begin each with `#!/bin/bash` and `set -e`. Keep hooks minimal — they run as root and must complete quickly.
+One shell script per hook named in `hooks[]`. Consult `references/snap-hooks-reference.md`
+for the correct hook body for each type. Begin each with `#!/bin/bash` and `set -e`. Keep
+hooks minimal — they run as root and must complete quickly.
 
 **`SNAP_PACKAGING.md`**
 Include:
 1. Prerequisites (snapcraft install, LXD or Multipass setup)
 2. Build command (`export SNAPCRAFT_BUILD_INFO=1 && snapcraft pack` from the project root)
 3. Install in devmode for first test: `sudo snap install --devmode *.snap`
-4. List every interface that requires manual connection with the exact `snap connect` command
+4. List every interface where `auto_connected: false` with the exact `snap connect` command
 5. How to switch to strict mode once interfaces are verified
 6. How to submit to the Snap Store (optional, if the app looks store-ready)
 7. Common troubleshooting (AppArmor denials via `snap run --shell`, `journalctl -xe`)
+8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
 
-### Step 6: Build and Verify
+### Step 3: Build and Verify
 
 Run `snapcraft pack` from the project root and iterate until the build succeeds. Always set `SNAPCRAFT_BUILD_INFO=1` so build provenance metadata is embedded in the snap.
 
@@ -142,19 +123,19 @@ snapcraft pack 2>&1
 **Lint warnings** (do not block the build — the snap still packs):
 - `title`, `contact`, `license`, `issues`, `source-code`, `website` are optional metadata; only add `license` when the app's license is unambiguous from the codebase.
 
-### Step 7: Report
+### Step 4: Report
 
 After the build succeeds, summarize in the chat:
 - Files created and their locations
-- Key decisions made (plugin choice, confinement level, interfaces selected) and why
-- Interfaces that require manual `snap connect` and why they are not auto-connected
-- Any assumptions made that the user should verify before building
+- Plugin choice and confinement level (sourced from `snap-analysis.json`)
+- Interfaces that require manual `snap connect`
+- Any notes from `snap-analysis.json` the user should act on
 
 ## Key Rules
 
+- **Requires `snap-analysis.json`** — run `snap-analyzer` first if it is absent
 - Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
-- Use language plugins (`go`, `python`, `npm`, `cmake`, `meson`, etc.) when the build fits them; reach for `nil` with `override-build` when the build is custom; use `dump` for file-copy-only snaps
-- Set `confinement: strict` by default
+- Never use `devmode` in generated files — it is a testing-only aid
 - If the app has multiple binaries or services, model each as a separate entry under `apps`
 - For daemons: use `daemon: simple` (stays in foreground) or `daemon: forking` (calls fork/daemonizes)
 - Layouts (`layout:`) are the right tool when an app hardcodes paths like `/etc/myapp` or `/var/lib/myapp`
