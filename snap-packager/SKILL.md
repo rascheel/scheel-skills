@@ -92,7 +92,7 @@ Include:
 2. Build command (`export SNAPCRAFT_BUILD_INFO=1 && snapcraft pack` from the project root)
 3. Install in devmode for first test: `sudo snap install --devmode *.snap`
 4. List every interface where `auto_connected: false` with the exact `snap connect` command
-5. How to switch to strict mode once interfaces are verified
+5. How to install with real confinement once manual devmode testing passes: `sudo snap install --dangerous *.snap`
 6. How to submit to the Snap Store (optional, if the app looks store-ready)
 7. Common troubleshooting (AppArmor denials via `snap run --shell`, `journalctl -xe`)
 8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
@@ -111,7 +111,7 @@ After patching, proceed directly to **Step 3** to rebuild.
 
 ### Step 3: Build and Verify
 
-Run `snapcraft pack` from the project root and iterate until the build succeeds. Always set `SNAPCRAFT_BUILD_INFO=1` so build provenance metadata is embedded in the snap.
+Run `snapcraft pack` from the project root and iterate until the build succeeds, up to **3 attempts**. Always set `SNAPCRAFT_BUILD_INFO=1` so build provenance metadata is embedded in the snap.
 
 ```bash
 cd <project-root>

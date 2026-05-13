@@ -3,16 +3,16 @@ name: snap-validator
 description: >
   Validates snap packages by provisioning a clean LXD container, installing the snap with
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
-  denials via snappy-debug. Iteratively patches snapcraft.yaml with required interfaces
-  based solely on observed runtime denials — never guesses. Hard-stops for classic
-  confinement. Produces a summary table of apps checked, denials found, and plugs added.
+  denials via snappy-debug. Records denials in snap-validation-results.json for
+  snap-packager to act on — never patches snapcraft.yaml directly. Hard-stops for classic
+  confinement. Produces a summary table of apps checked, denials found, and plugs suggested.
   WHEN: validate snap interfaces, test snap in LXD, snap AppArmor denials, snap security
-  testing, find snap plugs, snap confinement issues, snappy-debug scan, snap interface
-  discovery, snap runtime testing, iterative snap patching, snap permissions audit,
-  snapcraft.yaml interfaces, snap seccomp denial, snap access denied.
+  testing, find snap plugs, snap confinement issues, snappy-debug scan, snap runtime
+  testing, snap permissions audit, snapcraft.yaml interfaces, snap seccomp denial,
+  snap access denied.
 license: Apache-2.0
 metadata:
-  author: Canonical/platform-engineering
+  author: Canonical
   version: "1.0.0"
   summary: Runs a snap in LXD, captures AppArmor/SecComp denials, and iteratively patches snapcraft.yaml with only the required interfaces.
   tags:
@@ -35,7 +35,7 @@ plugs that are actually required. Classic-confinement snaps are excluded.
 
 ### 1.1 Parse snapcraft.yaml
 
-Read `snapcraft.yaml` directly and extract:
+Read `snap/snapcraft.yaml` and extract:
 
 - `snap_name` — value of the top-level `name:` key
 - `confinement` — value of the top-level `confinement:` key (default: `strict`)
