@@ -74,13 +74,32 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 User interest preferences are stored at `~/.config/mattermost-skill/user_preferences.json`.
 
-When summarizing messages:
-- Prioritize interested channels first
-- Omit or de-emphasize non-interested channels unless explicitly asked
-- Preference matching is against `channel.display_name` / `channel.name`
+**After validating auth and before doing any other work**, check if this file exists:
 
-If the preferences file does not exist, create it on first use by asking the user which
-channels they care about.
+```bash
+cat ~/.config/mattermost-skill/user_preferences.json 2>/dev/null
+```
+
+If the file does not exist or is empty, stop and ask the user:
+
+> I don't have any channel preferences saved yet. Which Mattermost channels or topics
+> are you most interested in? (e.g. specific channel names, DMs, team names)
+>
+> Also, are there any channels you'd like me to ignore or de-emphasize?
+
+Once the user responds, create the file:
+
+```json
+{
+  "interested": ["channel-name", "Another Channel"],
+  "not_interested": ["Noise Channel", "Alerts"]
+}
+```
+
+When summarizing messages:
+- Prioritize `interested` channels first
+- Omit or de-emphasize `not_interested` channels unless explicitly asked
+- Preference matching is against `channel.display_name` / `channel.name`
 
 ## API Reference
 
