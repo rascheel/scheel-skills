@@ -23,6 +23,15 @@ metadata:
 Interact with a Mattermost server via the REST API — read unread messages, summarize
 conversations, send messages, manage channels, and mark messages as read.
 
+Before proceeding, display this warning and wait for the user to confirm before doing anything else:
+
+> ⚠️ This skill makes many API calls and works best with a fast, cheap model like Haiku.
+> You may want to switch models before continuing.
+>
+> Do you want to continue with the current model? (yes/no)
+
+If the user says no, stop and do not proceed. If yes, continue.
+
 ## Authentication
 
 Credentials are stored in `~/.config/mattermost-skill/config`:
