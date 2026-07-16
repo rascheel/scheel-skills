@@ -12,7 +12,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.0"
+  version: "1.1.0"
   summary: "End-to-end snap pipeline: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
   tags:
     - snap
@@ -33,11 +33,13 @@ when its phase is done. The orchestrator manages control flow and the patch loop
 
 ## File Contracts
 
-The sub-agents communicate exclusively through these files in the project root:
+The sub-agents communicate exclusively through these files. `snap-analysis.json` is a
+transient hand-off artifact and lives under `/tmp` (project-scoped:
+`/tmp/snap-analysis-$(basename "$PWD").json`); the rest live in the project root.
 
 | File | Written by | Read by | Purpose |
 |---|---|---|---|
-| `snap-analysis.json` | snap-analyzer | snap-packager | Full packaging specification |
+| `/tmp/snap-analysis-<dir>.json` | snap-analyzer | snap-packager | Full packaging specification (transient) |
 | `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest |
 | `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report |
 
@@ -59,8 +61,15 @@ ls                  # confirm project root is not empty
 | `snapcraft` not found | Stop: "snapcraft is required. Install with: `snap install snapcraft`" |
 | Working directory empty | Stop: "No source files found. Run from the project root." |
 
-If `snap-analysis.json` already exists, ask the user whether to reuse it or regenerate.
-If `snap-validation-results.json` already exists, delete it before starting:
+Resolve the analysis path once and reuse it for every phase:
+
+```bash
+ANALYSIS_FILE="/tmp/snap-analysis-$(basename "$PWD").json"
+```
+
+If `$ANALYSIS_FILE` already exists (or a legacy `./snap-analysis.json`), ask the user
+whether to reuse it or regenerate. If `snap-validation-results.json` already exists,
+delete it before starting:
 
 ```bash
 rm -f snap-validation-results.json
@@ -74,11 +83,11 @@ rm -f snap-validation-results.json
 
 Provide this context to the sub-agent:
 - Run from the current working directory (project root)
-- Goal: write `snap-analysis.json`
+- Goal: write the analysis to `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`)
 
-Wait until `snap-analysis.json` is present and contains valid JSON before continuing.
+Wait until `$ANALYSIS_FILE` is present and contains valid JSON before continuing.
 
-If `snap-analysis.json` reports `"confinement": "classic"`, the user has already been
+If `$ANALYSIS_FILE` reports `"confinement": "classic"`, the user has already been
 prompted and confirmed classic confinement during the analysis phase. Skip Phases 3–4
 (validation does not apply to classic snaps) and proceed directly to Phase 5, noting the
 skip and reminding the user of the Store approval requirement and Ubuntu Core
@@ -91,7 +100,7 @@ incompatibility.
 **Delegate to: `snap-packager`**
 
 Provide this context to the sub-agent:
-- `snap-analysis.json` is present in the project root
+- The analysis is at `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`)
 - No `snap-validation-results.json` is present (initial packaging mode — Step 2a)
 - Goal: write `snap/snapcraft.yaml`, `snap/hooks/*`, `SNAP_PACKAGING.md`, and produce a
   built `.snap` file in the project root
@@ -164,12 +173,12 @@ Present a consolidated summary to the user.
 | `snap/hooks/*` | Lifecycle hooks (if any were generated) |
 | `SNAP_PACKAGING.md` | Build, install, and connection guide |
 | `<name>_<version>_<arch>.snap` | Built snap package |
-| `snap-analysis.json` | Analysis artifact (safe to commit or delete) |
+| `/tmp/snap-analysis-<dir>.json` | Analysis artifact (transient, in `/tmp` — no cleanup needed) |
 | `snap-validation-results.json` | Results of the last validation run |
 
 ### Interfaces Requiring Manual Connection
 
-List every interface from `snap-analysis.json` where `"auto_connected": false`, with the
+List every interface from `$ANALYSIS_FILE` where `"auto_connected": false`, with the
 exact `snap connect <snap-name>:<plug> :<interface>` command for each.
 
 ### Unresolved Denials (if loop exhausted)

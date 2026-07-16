@@ -12,8 +12,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.0"
-  summary: "Reads snap-analysis.json and generates snapcraft.yaml, lifecycle hooks, and a packaging guide, then builds the snap."
+  version: "1.1.0"
+  summary: "Reads snap-analysis.json (from /tmp) and generates snapcraft.yaml, lifecycle hooks, and a packaging guide, then builds the snap."
   tags:
     - snap
     - snapcraft
@@ -32,8 +32,15 @@ Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
 - `snap/hooks/<hook>` — lifecycle hooks (only those listed in the analysis)
 - `SNAP_PACKAGING.md` — build instructions, interface connection commands, and testing guide
 
-> If `snap-analysis.json` is not present, stop and instruct the user to run the
-> `snap-analyzer` skill first.
+> **Locating the analysis file:** `snap-analyzer` writes it to a project-scoped `/tmp`
+> path. Resolve it in this order and use the first that exists:
+>
+> ```bash
+> ANALYSIS_FILE="/tmp/snap-analysis-$(basename "$PWD").json"
+> [ -f "$ANALYSIS_FILE" ] || ANALYSIS_FILE="./snap-analysis.json"   # legacy fallback
+> ```
+>
+> If neither exists, stop and instruct the user to run the `snap-analyzer` skill first.
 
 ## Workflow
 
@@ -43,9 +50,10 @@ Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
 
 ### Step 1: Read snap-analysis.json
 
-Read `snap-analysis.json` from the project root. All decisions about language, plugin,
-confinement, interfaces, hooks, and layouts come from this file — do not re-inspect the
-source code. The fields are:
+Read the analysis file from `$ANALYSIS_FILE` (resolved as in the Overview: the
+project-scoped `/tmp` path, or the legacy `./snap-analysis.json` fallback). All decisions
+about language, plugin, confinement, interfaces, hooks, and layouts come from this file —
+do not re-inspect the source code. The fields are:
 
 | Field | Meaning |
 |---|---|
@@ -149,7 +157,8 @@ After the build succeeds, summarize in the chat:
 
 ## Key Rules
 
-- **Requires `snap-analysis.json`** — run `snap-analyzer` first if it is absent
+- **Requires `snap-analysis.json`** (at `/tmp/snap-analysis-$(basename "$PWD").json`, or
+  the legacy `./snap-analysis.json`) — run `snap-analyzer` first if it is absent
 - Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
 - Never use `devmode` in generated files — it is a testing-only aid
 - If the app has multiple binaries or services, model each as a separate entry under `apps`

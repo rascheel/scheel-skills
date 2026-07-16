@@ -12,8 +12,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.0"
-  summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snap-packager."
+  version: "1.1.0"
+  summary: "Scans a codebase and writes snap-analysis.json to /tmp — a structured packaging specification consumed by snap-packager."
   tags:
     - snap
     - snapcraft
@@ -24,9 +24,23 @@ metadata:
 
 # Snap Analyzer
 
-Scans the current project directory and writes `snap-analysis.json` — a complete
+Scans the current project directory and writes a `snap-analysis.json` — a complete
 packaging specification that the `snap-packager` skill consumes to generate
 `snapcraft.yaml`, lifecycle hooks, and a packaging guide.
+
+> **Where the file goes:** write it to a project-scoped path under `/tmp`, not the
+> project root — it is a transient hand-off artifact, not a project deliverable, so it
+> never pollutes the repo or gets committed by accident. The canonical path is:
+>
+> ```
+> /tmp/snap-analysis-<dirname>.json     where <dirname> = basename of the project dir
+> ```
+>
+> Compute it once and reuse it verbatim (the `snap-packager` skill reads the same path):
+>
+> ```bash
+> ANALYSIS_FILE="/tmp/snap-analysis-$(basename "$PWD").json"
+> ```
 
 ---
 
@@ -144,7 +158,8 @@ app has a genuine lifecycle requirement:
 
 ## Step 6: Write snap-analysis.json
 
-Write the file to `snap-analysis.json` in the project root. Use this exact schema:
+Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename "$PWD").json`),
+**not** the project root. Use this exact schema:
 
 ```json
 {
@@ -207,7 +222,8 @@ Write the file to `snap-analysis.json` in the project root. Use this exact schem
 
 ## Step 7: Report
 
-After writing `snap-analysis.json`, summarize in the chat:
+After writing the analysis file, summarize in the chat (state the full `/tmp` path so the
+user and the `snap-packager` skill know where it is):
 
 - **Language / plugin** chosen and why
 - **Confinement** chosen and why (especially if classic)

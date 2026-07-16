@@ -28,7 +28,7 @@ The orchestrator coordinates three skills in a build loop:
 ```
 
 The skills communicate through files on disk:
-- `snap-analysis.json` — analyzer → packager
+- `/tmp/snap-analysis-<dir>.json` — analyzer → packager (transient hand-off, kept out of the repo)
 - `snap/snapcraft.yaml` — packager → validator
 - `snap-validation-results.json` — validator → packager (patch mode)
 
