@@ -10,6 +10,7 @@ A set of AI agent skills that automate the full lifecycle of packaging applicati
 | **snap-packager** | Reads `snap-analysis.json` and generates `snap/snapcraft.yaml`, lifecycle hooks, and `SNAP_PACKAGING.md`, then builds the snap |
 | **snap-validator** | Installs the snap in a clean LXD container, exercises all apps/daemons, captures AppArmor/SecComp denials, and writes `snap-validation-results.json` |
 | **snap-orchestrator** | Coordinates the full pipeline: analyze → package → validate → patch → rebuild (looping until clean or max iterations) |
+| **snap-trimmer** | Shrinks an already-built snap by editing `snapcraft.yaml` — finds unused libraries, base/content-snap duplicates, and over-copied build scratch, then rebuilds and verifies no regression |
 | **snap-publisher** | Interactively guides uploading, releasing, and promoting snaps to the Snap Store |
 
 ### Pipeline Architecture
@@ -32,7 +33,7 @@ The skills communicate through files on disk:
 - `snap/snapcraft.yaml` — packager → validator
 - `snap-validation-results.json` — validator → packager (patch mode)
 
-**snap-publisher** is a separate, standalone skill — it is not part of the orchestrated pipeline. Use it after the pipeline produces a `.snap` file and you're ready to upload to the Store.
+**snap-trimmer** and **snap-publisher** are standalone skills — neither is part of the orchestrated pipeline. Both operate on an already-built `.snap`: run **snap-trimmer** after the pipeline produces a `.snap` to shrink it (it edits `snapcraft.yaml` and rebuilds, never touching the artifact directly), then **snap-publisher** when you're ready to upload to the Store.
 
 ## Installation
 
@@ -42,11 +43,12 @@ Install individual skills using the `skills` CLI. Each skill is self-contained a
 # Install a single skill (e.g., snap-packager for Claude Code)
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-packager -a claude-code -g
 
-# Install all five skills
+# Install all six skills
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-analyzer -a claude-code -g
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-packager -a claude-code -g
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-validator -a claude-code -g
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-orchestrator -a claude-code -g
+npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-trimmer -a claude-code -g
 npx skills add https://github.com/rascheel/scheel-skills/tree/main/snap-publisher -a claude-code -g
 ```
 
@@ -67,4 +69,5 @@ You can also invoke skills individually:
 - **Analyze only:** "Analyze this project for snap packaging" → produces `snap-analysis.json`
 - **Package only:** "Generate snapcraft.yaml from snap-analysis.json" → produces snap files and builds
 - **Validate only:** "Validate the snap in this directory" → tests in LXD and reports denials
+- **Trim:** "My snap is too big — shrink it" → edits `snapcraft.yaml`, rebuilds, and verifies no regression
 - **Publish:** "Publish this snap to the Snap Store" → interactive upload and release workflow
