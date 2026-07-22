@@ -155,14 +155,17 @@ else
   # Runtime-provided sonames shared by both old and new: base + content snaps.
   RUNTIME_PROVIDED="$WORKDIR/runtime.provided"; : > "$RUNTIME_PROVIDED"
   add_provided_from_mount(){
-    local m="/snap/$1/current"
-    [ -d "$m" ] || { err ">> $m not mounted; its provided libs are UNKNOWN (may over-report)"; return; }
-    err ">> Adding provided sonames from $m"
+    local raw="/snap/$1/current"
+    local m; m="$(readlink -f "$raw")"
+    [ -d "$m" ] || { err ">> $raw not mounted; its provided libs are UNKNOWN (may over-report)"; return; }
+    local n; n=$(find -L "$m" -type f \( -name '*.so' -o -name '*.so.*' \) 2>/dev/null | wc -l)
+    err ">> Adding provided sonames from $m ($n libs)"
+    [ "$n" -eq 0 ] && err ">> WARNING: 0 libs found under $m — provided-set will be under-counted; §4 may over-report regressions"
     while IFS= read -r f; do
       head -c4 "$f" 2>/dev/null | grep -q $'\x7fELF' || continue
       sn="$(soname_of "$f")"; [ -n "$sn" ] && echo "$sn" >> "$RUNTIME_PROVIDED"
       basename "$f" >> "$RUNTIME_PROVIDED"
-    done < <(find "$m" -type f \( -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
+    done < <(find -L "$m" -type f \( -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
   }
   [ -n "$BASE" ] && add_provided_from_mount "$BASE"
   for cs in "${CONTENT_SNAPS[@]:-}"; do [ -n "$cs" ] && add_provided_from_mount "$cs"; done
