@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.1",
+  "snap_name": "acme-nginx",
+  "confinement": "strict",
+  "clean": true,
+  "denials": [],
+  "oci_mode": true,
+  "devmode_pass": true,
+  "devmode_notes": [],
+  "target_arch": "amd64",
+  "test_environment_used": "native-lxd",
+  "store_review_interfaces": ["system-files"],
+  "reproducibility": {
+    "checked": true,
+    "diffs": [
+      { "path": "etc/nginx/nginx.conf", "kind": "modified", "detail": "listen port rewritten" }
+    ],
+    "clean": false
+  }
+}

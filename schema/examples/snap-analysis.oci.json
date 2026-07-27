@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.1",
+  "project": {
+    "name": "acme-nginx",
+    "version": "1.27",
+    "summary": "nginx packaged from an OCI image",
+    "description": "OCI case: full oci block populated.",
+    "license": null,
+    "grade": "stable"
+  },
+  "snap": { "base": "core24", "confinement": "strict", "classic_reason": null },
+  "build": {
+    "plugin": "dump",
+    "plugin_config": { "source": "rootfs", "source-type": "local" },
+    "build_packages": [],
+    "stage_packages": [],
+    "override_build_extra": null
+  },
+  "apps": [
+    { "name": "entrypoint", "command": "bin/library_wrapper.sh", "daemon": "simple", "plugs": ["network-bind"], "environment": {} }
+  ],
+  "hooks": ["install", "configure"],
+  "layouts": {},
+  "interfaces": [
+    { "name": "network-bind", "apps": ["entrypoint"], "auto_connected": true, "reason": "Listens on a port." }
+  ],
+  "notes": ["Do not lay out the same path a content plug targets."],
+  "oci": {
+    "image_ref": "nginx:1.27",
+    "digest": null,
+    "config_json_path": "config.json",
+    "rootfs_path": "rootfs",
+    "docker_to_snap_output_dir": "acme-nginx-snap",
+    "docker_to_snap_snapcraft_path": "snap/snapcraft.yaml",
+    "target_arch": "amd64",
+    "entrypoint": ["/docker-entrypoint.sh", "nginx", "-g", "daemon off;"],
+    "working_dir": null,
+    "exposed_ports": ["80/tcp"],
+    "env": { "NGINX_VERSION": "1.27" },
+    "volumes": [],
+    "user": { "uid": 0, "gid": 0, "username": null, "is_root": true },
+    "merged_usr": true,
+    "glibc_compat": { "oci_glibc_version": "2.36", "base_snap_glibc_version": "2.39", "compatible": true, "mitigation": "none" },
+    "system_usernames": { "needed": false, "method": null, "details": {} },
+    "overrides_needed": [
+      { "part": "acme-nginx", "phase": "build", "kind": "config_edit", "target_path": "etc/nginx/nginx.conf", "description": "Rewrite listen 80 to 8080 for strict confinement." }
+    ],
+    "content_interfaces": [],
+    "config_options": [
+      { "key": "port", "source": "config_file", "source_name": "listen", "type": "port", "allowed_values": [], "default": "8080", "config_file_format": "ini", "config_file_path": "$SNAP_COMMON/config/nginx.conf", "wiring": "cli_flag" }
+    ],
+    "reproducibility_baseline": { "tarball_path": "nginx_1.27.tar", "extraction_command_recorded": "./docker-to-snap --tarball nginx_1.27.tar --snap-store-prefix acme --application-name nginx --application-version 1.27 --suppress-build" }
+  }
+}

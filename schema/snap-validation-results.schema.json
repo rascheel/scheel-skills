@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://canonical.com/snap-orchestrator/snap-validation-results.schema.json",
+  "title": "snap-validation-results.json",
+  "description": "Report written by snap-validator and consumed by snap-packager (patch mode) and snap-orchestrator. Schema 1.1 is additive over 1.0: the OCI fields are optional and default to null/empty in the source-code case.",
+  "type": "object",
+  "required": ["schema_version", "snap_name", "confinement", "clean", "denials"],
+  "properties": {
+    "schema_version": { "enum": ["1.0", "1.1"] },
+    "snap_name": { "type": "string" },
+    "confinement": { "type": "string" },
+    "clean": { "type": "boolean" },
+    "denials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["app", "interface_suggestion", "raw_denial"],
+        "properties": {
+          "app": { "type": "string" },
+          "interface_suggestion": { "type": "string" },
+          "raw_denial": { "type": "string" }
+        }
+      }
+    },
+
+    "oci_mode": { "type": "boolean" },
+    "devmode_pass": { "type": ["boolean", "null"] },
+    "devmode_notes": { "type": "array", "items": { "type": "string" } },
+    "target_arch": { "type": ["string", "null"] },
+    "test_environment_used": { "type": ["string", "null"] },
+    "store_review_interfaces": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["interface"],
+            "properties": {
+              "interface": { "type": "string" },
+              "app": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "reproducibility": {
+      "type": ["object", "null"],
+      "required": ["checked"],
+      "properties": {
+        "checked": { "type": "boolean" },
+        "diffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "kind"],
+            "properties": {
+              "path": { "type": "string" },
+              "kind": { "enum": ["added", "removed", "modified"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "clean": { "type": "boolean" }
+      }
+    }
+  }
+}
