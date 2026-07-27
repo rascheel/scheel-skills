@@ -1,20 +1,23 @@
 ---
 name: snap-validator
 description: >
-  Validates snap packages by provisioning a clean LXD container, installing the snap with
+  Validates snap packages by provisioning a clean LXD container, installing with
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
   denials via snappy-debug. Records denials in snap-validation-results.json for
   snap-packager to act on — never patches snapcraft.yaml directly. Hard-stops for classic
-  confinement. Produces a summary table of apps checked, denials found, and plugs suggested.
-  WHEN: validate snap interfaces, test snap in LXD, snap AppArmor denials, snap security
-  testing, find snap plugs, snap confinement issues, snappy-debug scan, snap runtime
-  testing, snap permissions audit, snapcraft.yaml interfaces, snap seccomp denial,
-  snap access denied.
-license: Apache-2.0
+  confinement. For OCI-derived snaps it also runs a devmode-first crash check, flags
+  store-review-only interfaces, selects an architecture-appropriate test environment, and
+  reports rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
+  test snap in LXD, snap AppArmor denials, snap security testing, find snap plugs, snap
+  confinement issues, snappy-debug scan, snap runtime testing, snap permissions audit,
+  snapcraft.yaml interfaces, snap seccomp denial, snap access denied, devmode crash check,
+  ELF interpreter crash, store-review-only interfaces, snap rootfs reproducibility,
+  architecture-aware snap test environment.
+license: "Apache-2.0"
 metadata:
-  author: Canonical
-  version: "1.0.0"
-  summary: Runs a snap in LXD, captures AppArmor/SecComp denials, and iteratively patches snapcraft.yaml with only the required interfaces.
+  author: "Canonical"
+  version: "1.1.0"
+  summary: "Runs a snap in LXD and reports AppArmor/SecComp denials (plus devmode, store-review, and reproducibility findings for OCI snaps) — never patches yaml."
   tags:
     - snap
     - snapcraft
@@ -26,8 +29,20 @@ metadata:
 # Snap Validator
 
 Provisions a clean LXD container, installs the locally built snap, exercises every declared
-app and daemon, captures AppArmor/SecComp denials with `snappy-debug`, and adds only the
+app and daemon, captures AppArmor/SecComp denials with `snappy-debug`, and **reports** the
 plugs that are actually required. Classic-confinement snaps are excluded.
+
+> **This skill never patches `snapcraft.yaml` and never rebuilds.** It validates and
+> *reports*; the caller (typically `snap-orchestrator`, acting through `snap-packager`)
+> patches and rebuilds. This is true for every phase below, including the OCI reproducibility
+> phase, which only computes and reports the diff.
+
+**OCI mode.** For OCI-derived snaps the base flow is wrapped with three extra behaviors — a
+**devmode-first crash check** before the strict scan (§3.2), **store-review-only interface
+detection** + **architecture-aware environment selection** during the strict scan (§3.3),
+and a **rootfs reproducibility diff** once confinement is clean (§3.4). All are gated on OCI
+mode and all remain report-only. In the base (source-code) case none of them run and the
+output is byte-for-byte the original single-pass strict flow with the new fields null.
 
 ---
 
@@ -40,6 +55,16 @@ Read `snap/snapcraft.yaml` and extract:
 - `snap_name` — value of the top-level `name:` key
 - `confinement` — value of the top-level `confinement:` key (default: `strict`)
 - `apps` — for each entry under `apps:`, record `name`, `command`, and `daemon` (null if absent)
+
+### 1.1a Detect OCI mode
+
+Read `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`) when the caller
+provides it — `snap-orchestrator` passes this path. **OCI mode is true iff the analysis
+file's top-level `oci` key is present.** If the analysis file was not passed, fall back to
+detecting a `rootfs/` directory in the project root as a secondary signal. When OCI mode is
+true, also read `oci.target_arch` and `oci.reproducibility_baseline` — the devmode, arch,
+and reproducibility phases need them. In non-OCI mode, skip §3.2, the OCI extensions in
+§3.3, and §3.4 entirely, and set every new result field to its null/empty default (§4.2).
 
 ### 1.2 Classic confinement gate
 
@@ -63,8 +88,19 @@ Provision a clean container and install prerequisites. Replace `<snap-file>` wit
 actual `.snap` filename found in the working directory. If no `.snap` exists, ask the
 user to build one first (`snapcraft`).
 
+### 2.0 Architecture-aware environment selection (OCI mode)
+
+When OCI mode is on and `oci.target_arch` **does not match the host architecture**, a plain
+native `lxc launch ubuntu:24.04` cannot run the snap. Select the test environment using the
+decision tree in `references/build-environments.md` (native LXD when arch matches; an LXD
+remote on matching hardware; full-system emulation with snapd; or a QEMU/binfmt smoke test
+when only a shallow "does it start" check is possible). Record the choice as
+`test_environment_used` (e.g. `"native-lxd"`, `"lxd-remote"`, `"qemu-user-static"`,
+`"image-garden"`). In non-OCI mode, or when arch matches the host, use native LXD and set
+`test_environment_used` to `"native-lxd"` (OCI) or leave it `null` (non-OCI).
+
 ```bash
-# Create container
+# Native LXD (arch matches host) — the default
 lxc launch ubuntu:24.04 snap-test-env \
   -c security.nesting=true \
   -c security.privileged=false
@@ -81,6 +117,44 @@ lxc file push <snap-file>.snap snap-test-env/tmp/<snap-file>.snap
 # Install the snap (unsigned/local)
 lxc exec snap-test-env -- snap install --dangerous /tmp/<snap-file>.snap
 ```
+
+---
+
+## Step 2.5: Devmode-first crash check (OCI mode only)
+
+> **Run this before the strict scan (Step 3), only in OCI mode.** Skip entirely in the base
+> case. Ported from `snap-iteration-workflow` Phase 3 — see
+> `references/install-and-verify.md`.
+
+An OCI image can fail to *run at all* (wrong ELF interpreter, bad library layout) before
+confinement is ever exercised. Burning an LXD strict cycle on a snap that does not start is
+wasteful, so validate startup in `--devmode` first:
+
+```bash
+# Inside the selected test environment
+snap remove --purge <snap-name> 2>/dev/null || true
+snap install --dangerous --devmode /tmp/<snap-file>.snap
+# For daemons:
+snap start <snap-name>.<app> 2>/dev/null || true
+snap logs -f <snap-name>.<app> &   # watch briefly
+# For CLI apps:
+<snap-name>.<app> --help 2>&1 | head -20 || true
+```
+
+Confirm the entrypoint/daemon starts without crashing and the logs show no ELF-interpreter
+or library errors.
+
+> **ELF interpreter crash pattern:** if the process exits immediately with **no output**,
+> the interpreter layout or `LD_LIBRARY_PATH` is wrong — a **build-correctness** bug, not a
+> confinement issue. Record it in `devmode_notes[]` (quote the log/exit evidence).
+
+- **Pass:** set `devmode_pass: true`, `devmode_notes: []`, and continue to Step 3.
+- **Fail:** set `devmode_pass: false`, populate `devmode_notes[]`, write results, and
+  **STOP before the strict scan.** The orchestrator routes this to `snap-packager`'s
+  build-fix branch (not the denial-patch loop) — do not suggest plugs or layouts for a
+  crash-on-start failure.
+
+In non-OCI mode, `devmode_pass` stays `null`.
 
 ---
 
@@ -126,6 +200,21 @@ For every denial captured, record:
 Consult `references/denial-to-interface.md` when snappy-debug gives no explicit
 suggestion — it maps common denial patterns to the correct snap interface.
 
+### 3.4 Store-review-only interface detection (OCI mode)
+
+> **OCI mode only.** Skip in the base case.
+
+Cross-reference every interface that was **denial-suggested** (Step 3.3) or already
+**declared** in `snapcraft.yaml` against the known store-review-only list — interfaces that
+cannot be self-connected and require Snap Store manual review:
+
+`snapd-control`, `system-files`, `docker-support`, `kubernetes-support`.
+
+For each match, add an entry to `store_review_interfaces[]` (the interface name and which
+app needs it). See `references/install-and-verify.md` → "Identify store-review-only
+interfaces early". These are reported, not blocking — they inform the user of extra Store
+review time.
+
 ---
 
 ## Step 4: Write Results
@@ -136,11 +225,13 @@ Identify which `apps:` entry in `snapcraft.yaml` caused each denial.
 
 ### 4.2 Write snap-validation-results.json
 
-Write `snap-validation-results.json` to the project root using this schema:
+Write `snap-validation-results.json` to the project root using this schema (bumped to
+`"1.1"`). All base fields are unchanged; the OCI fields are optional and take their
+null/empty defaults in the base case, so schema-1.0 consumers keep working:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "snap_name": "<name>",
   "confinement": "<confinement>",
   "clean": false,
@@ -150,7 +241,15 @@ Write `snap-validation-results.json` to the project root using this schema:
       "interface_suggestion": "<plug-name>",
       "raw_denial": "<full AppArmor/SecComp log line>"
     }
-  ]
+  ],
+
+  "oci_mode": false,
+  "devmode_pass": null,
+  "devmode_notes": [],
+  "target_arch": null,
+  "test_environment_used": null,
+  "store_review_interfaces": [],
+  "reproducibility": null
 }
 ```
 
@@ -158,9 +257,55 @@ Write `snap-validation-results.json` to the project root using this schema:
 - Set `"interface_suggestion"` to the plug name from snappy-debug, or look up the denial
   in `references/denial-to-interface.md` if snappy-debug gives no suggestion.
 - Write one denial object per unique `(app, interface_suggestion)` pair — deduplicate.
+- **OCI fields:** set `oci_mode: true` in OCI mode. `devmode_pass` is `true`/`false` from
+  Step 2.5 (or `null` in the base case); `target_arch` from `oci.target_arch`;
+  `test_environment_used` from Step 2.0; `store_review_interfaces[]` from Step 3.4.
+  `reproducibility` is populated only by Step 3.5 (below), otherwise `null`.
+- When `devmode_pass: false`, write the results and stop after Step 2.5 — `clean` reflects
+  that the strict scan did not run (leave `denials: []`); the build fix is the caller's job.
 
 **Do not patch `snapcraft.yaml` or rebuild the snap.** The caller (or the
 `snap-orchestrator` skill) is responsible for acting on the results.
+
+---
+
+## Step 3.5: Rootfs reproducibility check (OCI mode only)
+
+> **OCI mode only, and only when invoked for the reproducibility check** — the orchestrator
+> calls this once the denial loop is clean (Phase 3.5). Skip in the base case. Ported from
+> `snap-iteration-workflow` Phase 5 / `snap-oci-container` Phase 6. **Report only — this
+> skill never patches or rebuilds.**
+
+Prove the recipe reproduces the snap from a clean extraction:
+
+1. Re-extract the original image into `rootfs_original/` using
+   `oci.reproducibility_baseline.tarball_path` and the exact
+   `extraction_command_recorded` (replay it verbatim, adding an isolated
+   `--output-folder`, then move its `rootfs/` to `rootfs_original/`).
+2. Diff against the working tree:
+   ```bash
+   diff -rq rootfs_original/ rootfs/
+   ```
+3. Populate the `reproducibility` block and **report** — do not encode overrides or swap
+   directories here:
+
+```json
+"reproducibility": {
+  "checked": true,
+  "diffs": [ { "path": "...", "kind": "added | removed | modified", "detail": "..." } ],
+  "clean": true
+}
+```
+
+- `kind`: `added` = present only in working `rootfs/`; `removed` = present only in
+  `rootfs_original/`; `modified` = content/symlink/permission/owner differs.
+- Set `"clean": true` and `"diffs": []` when the diff is empty (the recipe is fully
+  reproducible).
+- If the original image cannot be reproduced (no tarball, download fails), set
+  `"checked": false`, leave `diffs: []`, and note the reason in `devmode_notes`/summary.
+
+The orchestrator routes any non-empty `diffs[]` to `snap-packager` (which encodes them as
+override steps) and loops back; this skill's role ends at reporting the diff.
 
 ---
 
@@ -176,6 +321,9 @@ denials. `snap-validation-results.json` will have `"clean": true`.
 | App / Daemon | Denials Found | Plugs Suggested |
 |---|---|---|
 | `<app-name>` | `<denial or "None">` | `<plug(s) or "None">` |
+
+In OCI mode, also report: devmode pass/fail (with any ELF-crash note), the test environment
+used, store-review-only interfaces required, and reproducibility status (clean / N diffs).
 
 ### 5.3 Cleanup — always execute
 
@@ -197,6 +345,9 @@ lxc delete --force snap-test-env
 | Denial with no snappy-debug suggestion | Read `references/denial-to-interface.md` |
 | Container creation fails | Try `ubuntu:noble` as an alternative image |
 | `cloud-init` times out | Wait 60 s and retry; if still failing, recreate container |
+| Devmode start fails (OCI) | Set `devmode_pass: false` + `devmode_notes[]`; stop before strict scan; caller runs the build-fix branch |
+| Target arch ≠ host (OCI) | Select an environment per `references/build-environments.md`; record `test_environment_used` |
+| Original image not reproducible (OCI) | Set `reproducibility.checked: false`; note the reason; do not fail the run |
 
 ---
 
@@ -205,3 +356,5 @@ lxc delete --force snap-test-env
 | File | Purpose |
 |---|---|
 | `references/denial-to-interface.md` | Maps AppArmor denial patterns to snap interface names |
+| `references/install-and-verify.md` | Devmode install, ELF-crash pattern, `snap try`, store-review-only interface identification (OCI mode) |
+| `references/build-environments.md` | Architecture-aware test-environment decision tree (OCI cross-arch) |
