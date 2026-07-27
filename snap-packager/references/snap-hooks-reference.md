@@ -231,3 +231,86 @@ parts:
       snapcraftctl prime
       chmod +x $SNAPCRAFT_PRIME/snap/hooks/*
 ```
+
+---
+
+# OCI operator-configuration hook bodies (OCI rendering mode)
+
+When packaging an OCI-derived analysis (`snap-analysis.json` contains an `oci` key),
+the `oci.config_options[]` facts drive **generated** `configure`/`install` hook bodies.
+This section is the rendering pattern; it complements — it does not replace — the
+lifecycle-hook guidance above. The source material is the `snap-config-guide.md`
+mechanics (`snapctl get/set`, config-file wiring); the concrete templates live in
+`assets/configure-hook-template.sh` and `assets/install-hook-additions.sh`.
+
+> **Never write to `rootfs/`.** Hook bodies write only to `$SNAP_COMMON` (persistent
+> across refresh) — never `$SNAP` (read-only) and never `$SNAP_DATA` (revision-scoped,
+> lost on upgrade) for config.
+
+## Rendering the configure hook from `oci.config_options[]`
+
+Start from `assets/configure-hook-template.sh`. For **each** option in
+`oci.config_options[]`, emit three things:
+
+1. **A `snapctl get <key>` read** with the option's `default` as fallback:
+   ```bash
+   port=$(snapctl get port); port="${port:-8080}"
+   ```
+2. **Validation matched to `type`** (only when the value is non-empty — an unset key must
+   never fail `snap set`):
+   - `port` → integer 1–65535
+   - `integer` → positive integer (or the option's documented range)
+   - `enum` → `case` over `allowed_values`
+   - `path` → file/dir existence check
+   - `string` → reject shell metacharacters `[;&|`$(){}]` if interpolated
+3. **A config-file write block chosen by `config_file_format`** (`ini`/`yaml`/`json`/`env`;
+   `null` → env-file or CLI-flag wiring only). Delete the unused format blocks from the
+   template. Write to `oci.config_options[].config_file_path` (a `$SNAP_COMMON` path).
+
+Add `snapctl restart <snap-name>.<app-name>` **only when the app is a daemon**
+(`apps[].daemon != null`). For run-to-completion apps, omit it — a `snapctl restart` on a
+non-service snap fails `snap set` with `unknown service`.
+
+## Rendering / extending the install hook
+
+`docker-to-snap` already generates an `install` hook (for `/etc/hosts` advertisement).
+**Append** the additions from `assets/install-hook-additions.sh` — do not replace the
+generated hook. The additions:
+
+1. Create `$SNAP_COMMON` config directories.
+2. Seed the default config file **only if absent** (`[ ! -f ... ]`) so operator edits
+   survive re-install/refresh — Option A (copy a bundled default from `$SNAP`) when the
+   image ships a usable default under `rootfs/etc/<app>/`, else Option B (generate minimal
+   defaults from the option `default`s).
+3. Set initial `snapctl set <key>=<default>` for each exposed option so `snap get` shows
+   meaningful values immediately.
+
+## Config-file wiring (from `oci.config_options[].wiring`)
+
+- `cli_flag` → add `APP_ARGS: --config $SNAP_COMMON/config/<app>.conf` under the app's
+  `environment:` (or patch the wrapper).
+- `env_var` → add `<APP>_CONFIG_FILE: $SNAP_COMMON/config/<app>.conf` under `environment:`.
+- `layout` → the hardcoded config path is bound to `$SNAP_COMMON` via a `layout:` entry
+  (target must be `$SNAP_COMMON/...`, never `$SNAP/...`), and the install hook creates and
+  seeds that directory.
+
+## Hooks stanza
+
+Merge into (do not replace) the generated `hooks:` stanza; keep `network-control` on the
+generated hooks that write `/etc/hosts`:
+
+```yaml
+hooks:
+  install:
+    plugs:
+      - network-control
+  configure:
+    plugs:
+      - network-control
+```
+
+## Rebuild rule for hook changes
+
+Hooks live outside the parts system. After creating or editing any hook, clean the whole
+project before rebuilding so snapd does not serve a cached hook:
+`snapcraft clean --use-lxd` (note: `snapcraft clean` does **not** accept `--build-for`).

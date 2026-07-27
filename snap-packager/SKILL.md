@@ -8,12 +8,14 @@ description: >
   succeeds. WHEN: package as snap, create snapcraft.yaml, snap this application, snap packaging,
   convert to snap, create snap, add snap support, snap confinement, snapcraft configuration,
   snap interfaces, snap hooks, snap build, package with snapcraft, core24 snap, snapcraft 8,
-  make a snap, write snapcraft yaml, snap containerize, generate snap files.
+  make a snap, write snapcraft yaml, snap containerize, generate snap files,
+  OCI config to snap, container to snap, snap platforms build-for, system-usernames,
+  snap override-build, snap content interface, snap configure hook from OCI.
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.1.0"
-  summary: "Reads snap-analysis.json (from /tmp) and generates snapcraft.yaml, lifecycle hooks, and a packaging guide, then builds the snap."
+  version: "1.2.0"
+  summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
     - snapcraft
@@ -27,10 +29,24 @@ metadata:
 
 ## Overview
 
-Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
+Reads `snap-analysis.json` (written by the `snap-analyzer` **or** `snap-oci-analyzer`
+skill) and produces:
 - `snap/snapcraft.yaml` — the snap manifest (core24, snapcraft 8.x)
 - `snap/hooks/<hook>` — lifecycle hooks (only those listed in the analysis)
 - `SNAP_PACKAGING.md` — build instructions, interface connection commands, and testing guide
+
+> **This skill is the *only* writer of `snap/snapcraft.yaml`** in the pipeline. Both
+> analyzers emit *facts*; the validator only *reports*. Every mutation of the manifest —
+> initial render, denial patches, layouts, overrides, hooks — happens here, via
+> `scripts/patch_snapcraft.py` (see Step 2.4). **Never write to a container `rootfs/`
+> directly**; a change the image needs is encoded as an `override-build:`/`override-prime:`
+> step, never applied to the source tree.
+
+> **Two input shapes, one contract.** If `snap-analysis.json` has an `oci` key it came
+> from `snap-oci-analyzer` (a container image) — take the **OCI rendering path** (Step 2a,
+> OCI variant). Otherwise it came from `snap-analyzer` (source code) — take the original
+> path unchanged. Schema `1.0` (no `oci` key) and `1.1` without an `oci` key both behave
+> exactly as before.
 
 > **Locating the analysis file:** `snap-analyzer` writes it to a project-scoped `/tmp`
 > path. Resolve it in this order and use the first that exists:
@@ -45,8 +61,9 @@ Reads `snap-analysis.json` (written by the `snap-analyzer` skill) and produces:
 ## Workflow
 
 > **Patch mode:** If `snap-validation-results.json` is present in the project root with
-> `"clean": false`, skip to **Step 2b** — patch `snap/snapcraft.yaml` based on the denial
-> list and then rebuild. Steps 1 and 2a are only needed for the initial packaging run.
+> `"clean": false`, skip to **Step 2b** — patch `snap/snapcraft.yaml` based on the results
+> (denials, and — in OCI mode — devmode/reproducibility findings) and then rebuild. Steps 1
+> and 2a are only needed for the initial packaging run.
 
 ### Step 1: Read snap-analysis.json
 
@@ -57,10 +74,11 @@ do not re-inspect the source code. The fields are:
 
 | Field | Meaning |
 |---|---|
+| `schema_version` | `"1.0"` or `"1.1"`; `"1.1"` may carry an `oci` block |
 | `project.*` | Snap name, version, summary, description, license, grade |
 | `snap.base` | Always `core24` |
 | `snap.confinement` | `strict` or `classic` |
-| `build.plugin` | Snapcraft plugin to use |
+| `build.plugin` | Snapcraft plugin to use (`dump` for OCI, with a local `rootfs/` source) |
 | `build.plugin_config` | Plugin-specific keys to merge into the `parts` entry |
 | `build.build_packages` / `build.stage_packages` | Dependency lists |
 | `build.override_build_extra` | Extra shell commands to append after `craftctl default` (null if none) |
@@ -70,11 +88,29 @@ do not re-inspect the source code. The fields are:
 | `interfaces[].auto_connected` | Drives whether a `snap connect` command appears in SNAP_PACKAGING.md |
 | `notes[]` | Caveats to surface in the chat summary and SNAP_PACKAGING.md |
 
+**OCI-mode detection:** if the top-level `oci` key is present, this analysis describes a
+container image; switch Step 2a into **OCI rendering mode** and read these additional
+fields (all produced by `snap-oci-analyzer`):
+
+| `oci.*` field | Consumed for |
+|---|---|
+| `docker_to_snap_snapcraft_path` | Scaffold manifest to refine in place (Step 2a start point) |
+| `rootfs_path` | The `dump`-plugin `source:` (already in `build.plugin_config`) |
+| `target_arch` | The `platforms:` stanza |
+| `merged_usr`, `glibc_compat` | `command:` path selection + RPATH mitigation |
+| `system_usernames` | `system-usernames:` stanza + wrapper privilege-drop |
+| `overrides_needed[]` | `override-build:` / `override-prime:` steps |
+| `content_interfaces[]` | `slots:` / `plugs:` content-interface blocks |
+| `config_options[]` | `configure`/`install` hook bodies + config-file wiring |
+| `entrypoint`, `working_dir`, `env`, `exposed_ports`, `volumes`, `user` | Context/cross-checks |
+| `reproducibility_baseline` | Passed through untouched — the validator reads it |
+
 All decisions about confinement, plugin choice, interfaces, and hooks have already been made
-by the `snap-analyzer` skill and recorded in `snap-analysis.json`. Do not second-guess them.
+by the analyzer and recorded in `snap-analysis.json`. Do not second-guess them.
 
 Consult `references/snapcraft-core24-reference.md` for field syntax when translating the
-analysis into YAML.
+analysis into YAML. `snap-validation-results.json`'s extended fields (`devmode_pass`,
+`devmode_notes`, `reproducibility`) also feed Step 2b — see Step 2.3.
 
 ### Step 2a: Write Files to Disk (initial mode)
 
@@ -105,17 +141,124 @@ Include:
 7. Common troubleshooting (AppArmor denials via `snap run --shell`, `journalctl -xe`)
 8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
 
+### Step 2a (OCI variant): OCI rendering mode
+
+Take this path **instead of** the initial-mode Step 2a above when `snap-analysis.json`
+has an `oci` key. Everything else about the pipeline (Step 3 build, Step 4 report) is
+unchanged. The read-only-`rootfs/` rule from the Overview applies throughout: encode every
+image change as an override step; never edit the source tree.
+
+**1. Start from the `docker-to-snap` scaffold, not the blank template.** Read
+`oci.docker_to_snap_snapcraft_path` and refine that file in place — it already encodes real
+generated machinery (the wrapper script, `build_scripts/` wiring, a `/etc/hosts` install
+hook) that would be costly to regenerate from facts. Do not start from
+`assets/snapcraft.yaml.template` in OCI mode.
+
+**2. Bake the target architecture into the recipe.** Write a `platforms:` stanza from
+`oci.target_arch` so the build targets exactly one architecture (a single container image
+is not multi-arch), rather than relying on callers to pass `--build-for`:
+
+```yaml
+platforms:
+  <target_arch>:
+    build-on: [<target_arch>]
+    build-for: [<target_arch>]
+```
+
+**3. Render `system-usernames:` + privilege drop** from `oci.system_usernames` (when
+`needed`). Add the stanza (`system-usernames: {_daemon_: shared}`) and apply the wrapper
+privilege-drop for the recorded `method` (env-var/CLI-flag set to `_daemon_`, a `setpriv`
+wrapper, or none for `getpwnam_hardcoded`). See `references/system-usernames-guide.md`
+(rendering sections).
+
+**4. Render `override-build:` / `override-prime:` steps** from `oci.overrides_needed[]`.
+Translate each structured fact (`kind`, `target_path`, `phase`) into the concrete command
+idiom using `references/override-steps-guide.md`. Apply them with `patch_snapcraft.py`
+(`--override-build` / `--override-prime`, see Step 2.4). For >~3 mutations or reusable
+sets, extract scripts into a `patch_scripts/` folder and call them from the override; clean
+the affected part before rebuilding when a part-run script changes. **Never write to
+`rootfs/`.**
+
+**5. Render `slots:` / `plugs:` content-interface blocks** from `oci.content_interfaces[]`
+using `references/content-interface-guide.md` — provider declares a `content` slot exposing
+`$SNAP_COMMON/<subpath>`; consumer declares a matching `content` plug with `target:
+$SNAP_COMMON/<subpath>`. Honor the **double-bind rule**: do not add a `layout:` for the same
+path a content plug's `target` resolves to. Do not set `default-provider` for locally-built
+snaps.
+
+**6. Render `configure`/`install` hook bodies** from `oci.config_options[]` per the "OCI
+operator-configuration hook bodies" section of `references/snap-hooks-reference.md` (built
+from `assets/configure-hook-template.sh` and `assets/install-hook-additions.sh`). **Append
+to** — never replace — the `docker-to-snap`-generated install hook. Add
+`snapctl restart` only for daemon apps. Merge (don't replace) the generated `hooks:`
+stanza. Because hooks live outside the parts system, changing them requires
+`snapcraft clean --use-lxd` before the next build.
+
+**7. Apply glibc / merged-`/usr` mitigation** from `oci.glibc_compat` / `oci.merged_usr`:
+select the `command:` path (`usr/bin/…` when merged, else `bin/library_wrapper.sh`); when
+`glibc_compat.mitigation == "rpath_embed"`, add an `override-build` step that invokes the
+scaffold's `build_scripts/embed_rpath.sh` (generated by `docker-to-snap`, **not** shipped by
+this skill — never copy it, only wire the call). **Never add `LD_LIBRARY_PATH`** to
+`environment:` for a glibc mismatch — use RPATH embedding.
+
+Then write `SNAP_PACKAGING.md` as in initial mode, additionally documenting: the target
+architecture, any `snap set <key>` config options, content interfaces to connect, and
+store-review-only interfaces the validator flags.
+
 ### Step 2b: Patch snapcraft.yaml (patch mode)
 
-Read `snap-validation-results.json`. For each entry in `denials[]`:
+Read `snap-validation-results.json` and branch on the *kind* of remediation. Use
+`scripts/patch_snapcraft.py` for every mutation (Step 2.4) — do not hand-edit YAML.
 
-1. Open `snap/snapcraft.yaml` and locate the `apps.<app-name>` section.
-2. If a `plugs:` list exists, append `interface_suggestion` (skip if already present).
-3. If no `plugs:` key exists, add `plugs:` with the new plug as its first item.
-4. Preserve all existing comments and formatting — this is an in-place surgical edit.
-5. This operation is idempotent — never duplicate a plug already listed.
+**(a) Denial → plug** (base case, all modes). For each entry in `denials[]`:
+- Add `interface_suggestion` to `apps.<app>.plugs` (idempotent — never duplicate):
+  `patch_snapcraft.py --app <app> --plugs <interface_suggestion>`.
+
+**(b) Denial → layout** (when the denial is a hardcoded path, not a capability). Add a
+`layout:` entry binding the path into `$SNAP`/`$SNAP_COMMON`, validated against
+`references/…` layout constraints: `patch_snapcraft.py --layout /hardcoded/path
+'$SNAP/hardcoded/path'`. (Representable in the schema already; now an explicit Step-2b
+action.)
+
+**(c) `devmode_pass: false` → build-correctness fix** (OCI mode). This is **not** a
+confinement denial — do not touch plugs/layouts. Consume `devmode_notes[]` (e.g. ELF
+interpreter / library-layout errors) and fix the recipe: correct the interpreter-patching
+`override-build`, the `command:` path, or RPATH embedding. See the ELF-crash guidance in
+`references/glibc-compat-guide.md` / `override-steps-guide.md`.
+
+**(d) `reproducibility.diffs[]` → override additions** (OCI mode). Each diff entry
+(`added`/`removed`/`modified`) becomes an `oci.overrides_needed`-shaped fix rendered exactly
+like Step 2a variant #4: map the delta to a deterministic `override-build`/`override-prime`
+command via `references/override-steps-guide.md` and apply with `patch_snapcraft.py`.
 
 After patching, proceed directly to **Step 3** to rebuild.
+
+### Step 2.4: `patch_snapcraft.py` — the single manifest mutator
+
+`scripts/patch_snapcraft.py` is the packager's **only** tool for mutating
+`snap/snapcraft.yaml`, in both Step 2a and Step 2b. It is idempotent (skips
+plugs/layouts/override-commands already present), `--dry-run`-capable, and writes a
+`snapcraft.yaml.bak` before saving. Always dry-run first, then apply:
+
+```bash
+# Plugs + layouts (dry run, then drop --dry-run to apply)
+python3 <skill-dir>/scripts/patch_snapcraft.py \
+  --snapcraft snap/snapcraft.yaml --app <app> \
+  --plugs network network-bind \
+  --layout /var/lib/<app> '$SNAP_COMMON/<app>' --dry-run
+
+# Override steps on a part
+python3 <skill-dir>/scripts/patch_snapcraft.py \
+  --snapcraft snap/snapcraft.yaml --part <part> \
+  --override-build "patchelf --set-interpreter \$SNAPCRAFT_PART_INSTALL/lib/ld.so \$SNAPCRAFT_PART_INSTALL/usr/bin/<app>" \
+  --override-build "chmod 755 \$SNAPCRAFT_PART_INSTALL/usr/bin/<app>"
+```
+
+Exit codes: `1` file not found · `2` app not found · `3` YAML parse error · `4` no
+`--plugs`/`--layout`/`--override-build`/`--override-prime` given · `5` `--part` not found ·
+`6` `--override-*` without `--part`. The `hooks:` stanza and `platforms:` stanza are not
+part targets — add those directly to the YAML (the script targets apps and parts). Reserve
+freehand edits for those two stanzas only.
 
 ### Step 3: Build and Verify
 
@@ -158,7 +301,16 @@ After the build succeeds, summarize in the chat:
 ## Key Rules
 
 - **Requires `snap-analysis.json`** (at `/tmp/snap-analysis-$(basename "$PWD").json`, or
-  the legacy `./snap-analysis.json`) — run `snap-analyzer` first if it is absent
+  the legacy `./snap-analysis.json`) — run `snap-analyzer` (source) or `snap-oci-analyzer`
+  (container) first if it is absent
+- **This skill is the sole writer of `snap/snapcraft.yaml`.** Analyzers emit facts; the
+  validator only reports. Use `scripts/patch_snapcraft.py` for every mutation.
+- **Never write to a container `rootfs/`.** Encode every image change as an
+  `override-build:`/`override-prime:` step so the recipe is self-contained and reproducible.
+- **OCI mode** (analysis has an `oci` key): start from the `docker-to-snap` scaffold, add a
+  `platforms:` stanza from `oci.target_arch`, and render system-usernames / overrides /
+  content interfaces / config hooks from the `oci.*` facts. Never use `LD_LIBRARY_PATH` for
+  a glibc mismatch — use RPATH embedding via the generated `build_scripts/embed_rpath.sh`.
 - Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
 - Never use `devmode` in generated files — it is a testing-only aid
 - If the app has multiple binaries or services, model each as a separate entry under `apps`
@@ -166,3 +318,19 @@ After the build succeeds, summarize in the chat:
 - Layouts (`layout:`) are the right tool when an app hardcodes paths like `/etc/myapp` or `/var/lib/myapp`
 - Stage packages go in `stage-packages` on the part; build-time-only packages go in `build-packages`
 - **Prefer `build-packages`/`stage-packages` over `build-snaps`/`stage-snaps`** — automatic CVE reporting works correctly only when dependencies come from `stage-packages` (combined with `SNAPCRAFT_BUILD_INFO=1`). Use `build-snaps`/`stage-snaps` only when a dependency is unavailable as a Debian package or must come from a specific snap (e.g., a snap SDK or a content-sharing snap provider)
+
+## Resources
+
+| File | Purpose |
+|---|---|
+| `assets/snapcraft.yaml.template` | Structural reference for the initial (non-OCI) manifest |
+| `assets/configure-hook-template.sh` | Starter `snap/hooks/configure` with validation for common option types (OCI mode) |
+| `assets/install-hook-additions.sh` | Additions to merge into a `docker-to-snap` install hook for default config + initial keys (OCI mode) |
+| `references/snapcraft-core24-reference.md` | core24 / snapcraft 8.x field syntax |
+| `references/snap-hooks-reference.md` | Lifecycle hooks + OCI operator-configuration hook-body rendering |
+| `references/snap-interfaces-catalog.md` | Interface names and AC/MC status |
+| `references/override-steps-guide.md` | Map rootfs/prime mutations → `override-build`/`override-prime` (OCI mode) |
+| `references/content-interface-guide.md` | Content slot/plug rendering + double-bind rule (OCI mode) |
+| `references/glibc-compat-guide.md` | glibc / merged-`/usr` mitigation rendering, ELF-crash fixes (OCI mode) |
+| `references/system-usernames-guide.md` | `system-usernames:` stanza + privilege-drop wrapper rendering (OCI mode) |
+| `scripts/patch_snapcraft.py` | The single tool for all `snapcraft.yaml` mutations (plugs, layouts, override steps) |
