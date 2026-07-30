@@ -131,10 +131,9 @@ filename-inference rules.
 
 **Gather required information** (do not assume required values):
 
-- **`--snap-store-prefix`** *(required — always ask)*: Brand Store namespace prefix; the
-  snap is named `<prefix>-<application-name>`.
-- **`--application-name`** / **`--application-version`**: infer from a
-  `<name>_<version>.tar` filename and confirm; otherwise ask (version default `0.1`).
+- **`--application-name`** / **`--application-version`**: `--application-name` is the
+  full, unitary snap name — infer it from a `<name>_<version>.tar` filename and confirm;
+  otherwise ask. Infer `--application-version` the same way (version default `0.1`).
 - **`--output-folder`**, **`--service-name`**, **`--envvars`**: optional; prompt once.
 - **`--do-not-daemonize`**: **classify, don't blindly ask.** Long-lived
   server/listener/broker/scheduler/pipeline-stage → daemon (omit the flag). A
@@ -152,7 +151,6 @@ filename-inference rules.
 ```bash
 ./docker-to-snap \
   --tarball <path-to-tar> \
-  --snap-store-prefix <prefix> \
   [--application-name <name>] \
   [--application-version <version>] \
   [--output-folder <folder>] \

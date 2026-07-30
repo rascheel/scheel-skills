@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1",
-  "snap_name": "acme-nginx",
+  "snap_name": "nginx",
   "confinement": "strict",
   "clean": true,
   "denials": [],

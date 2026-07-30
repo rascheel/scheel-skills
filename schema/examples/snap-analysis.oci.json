@@ -1,7 +1,7 @@
 {
   "schema_version": "1.1",
   "project": {
-    "name": "acme-nginx",
+    "name": "nginx",
     "version": "1.27",
     "summary": "nginx packaged from an OCI image",
     "description": "OCI case: full oci block populated.",
@@ -30,7 +30,7 @@
     "digest": null,
     "config_json_path": "config.json",
     "rootfs_path": "rootfs",
-    "docker_to_snap_output_dir": "acme-nginx-snap",
+    "docker_to_snap_output_dir": "nginx-snap",
     "docker_to_snap_snapcraft_path": "snap/snapcraft.yaml",
     "target_arch": "amd64",
     "entrypoint": ["/docker-entrypoint.sh", "nginx", "-g", "daemon off;"],
@@ -43,12 +43,12 @@
     "glibc_compat": { "oci_glibc_version": "2.36", "base_snap_glibc_version": "2.39", "compatible": true, "mitigation": "none" },
     "system_usernames": { "needed": false, "method": null, "details": {} },
     "overrides_needed": [
-      { "part": "acme-nginx", "phase": "build", "kind": "config_edit", "target_path": "etc/nginx/nginx.conf", "description": "Rewrite listen 80 to 8080 for strict confinement." }
+      { "part": "nginx", "phase": "build", "kind": "config_edit", "target_path": "etc/nginx/nginx.conf", "description": "Rewrite listen 80 to 8080 for strict confinement." }
     ],
     "content_interfaces": [],
     "config_options": [
       { "key": "port", "source": "config_file", "source_name": "listen", "type": "port", "allowed_values": [], "default": "8080", "config_file_format": "ini", "config_file_path": "$SNAP_COMMON/config/nginx.conf", "wiring": "cli_flag" }
     ],
-    "reproducibility_baseline": { "tarball_path": "nginx_1.27.tar", "extraction_command_recorded": "./docker-to-snap --tarball nginx_1.27.tar --snap-store-prefix acme --application-name nginx --application-version 1.27 --suppress-build" }
+    "reproducibility_baseline": { "tarball_path": "nginx_1.27.tar", "extraction_command_recorded": "./docker-to-snap --tarball nginx_1.27.tar --application-name nginx --application-version 1.27 --suppress-build" }
   }
 }

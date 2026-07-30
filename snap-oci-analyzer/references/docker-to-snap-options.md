@@ -16,7 +16,6 @@ confinement iteration are handled by `snap-iteration-workflow` in Phase 5.
 | Parameter | Flag | Notes |
 |---|---|---|
 | Tarball path | `--tarball <path>` | Path to the `.tar` file from `docker save` or OCI export |
-| Brand Store prefix | `--snap-store-prefix <prefix>` | Namespace prefix for the snap name (e.g. `acme` → snap named `acme-myapp`). **Always prompt the user for this.** |
 
 ---
 
@@ -29,7 +28,7 @@ convention, or if the user has specific requirements:
 |---|---|---|---|
 | Application name | `--application-name <name>` | Inferred from tarball filename (`myapp_1.2.tar` → `myapp`) | Prompt if filename does not match `name_version.tar` pattern, or if user wants to override |
 | Application version | `--application-version <ver>` | Inferred from tarball filename | Prompt if not inferable or user wants to override |
-| Output folder | `--output-folder <folder>` | `<prefix>-<name>-snap` | Prompt if user wants a custom destination |
+| Output folder | `--output-folder <folder>` | `<name>-snap` | Prompt if user wants a custom destination |
 | Service name | `--service-name <name>` | Same as application name | Prompt if the DNS service hostname should differ from the app name |
 
 ---
@@ -179,7 +178,6 @@ python3 <skill-dir>/scripts/download_image.py \
 
 ./docker-to-snap \
   --tarball nginx_latest.tar \
-  --snap-store-prefix acme \
   --application-name nginx \
   --application-version latest \
   --suppress-build
@@ -189,7 +187,6 @@ python3 <skill-dir>/scripts/download_image.py \
 ```bash
 ./docker-to-snap \
   --tarball myapp_1.2.3.tar \
-  --snap-store-prefix acme \
   --suppress-build
 ```
 
@@ -197,7 +194,6 @@ python3 <skill-dir>/scripts/download_image.py \
 ```bash
 ./docker-to-snap \
   --tarball myapp-image.tar \
-  --snap-store-prefix acme \
   --application-name myapp \
   --application-version 1.2.3 \
   --suppress-build
@@ -207,8 +203,7 @@ python3 <skill-dir>/scripts/download_image.py \
 ```bash
 ./docker-to-snap \
   --tarball myapp_1.2.3.tar \
-  --snap-store-prefix acme \
-  --output-folder /tmp/acme-myapp-snap \
+  --output-folder /tmp/myapp-snap \
   --service-name myapp-svc \
   --suppress-build
 ```
@@ -217,7 +212,6 @@ python3 <skill-dir>/scripts/download_image.py \
 ```bash
 ./docker-to-snap \
   --tarball myapp_1.2.3.tar \
-  --snap-store-prefix acme \
   --do-not-daemonize \
   --suppress-build
 ```
