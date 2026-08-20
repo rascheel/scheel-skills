@@ -364,7 +364,7 @@ inside the snap, even though `getent passwd <serviceuser>` works on the host.
 
 **Fix:** Use `libnss_wrapper.so` with a writable temp copy of `/etc/passwd`
 populated from the OCI image's own `/etc/passwd` (which already has the service
-user). See `snap-oci-container/references/system-usernames-guide.md §9` for full details.
+user). See `snap-packager/references/system-usernames-guide.md §9` for full details.
 
 ### Step 2: Observe denials with snappy-debug
 

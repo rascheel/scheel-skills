@@ -7,10 +7,11 @@ The living definition of the two JSON files the `snap-orchestrator` sub-agents e
   top-level `oci` block (present only for container input).
 - `snap-validation-results.schema.json` — written by `snap-validator`, read by
   `snap-packager` (patch mode) and `snap-orchestrator`. Schema **1.1** = schema 1.0 **plus**
-  the optional diagnostics and OCI fields (`diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`, `target_arch`,
-  `test_environment_used`, `store_review_interfaces`, `reproducibility`), all null/empty in
-  the source-code case. `store_review_interfaces` is populated for every run (OCI or source)
-  and stays empty only when the snap needs none of the store-review-only interfaces.
+  the optional fields `diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`, `target_arch`,
+  `test_environment_used`, `store_review_interfaces`, `reproducibility`. `devmode_pass`/
+  `devmode_notes` and `store_review_interfaces` are populated for every run (OCI or
+  source-built); `diagnostics`, `oci_mode`, `target_arch`, `test_environment_used`, and `reproducibility`
+  stay null/empty in the source-code case.
 
 Both bumps are **additive**: a schema-1.0 producer/consumer still interoperates.
 
@@ -31,5 +32,5 @@ the `jsonschema` library when installed and otherwise falls back to a built-in s
 checker, so it runs in CI/pre-commit with no extra dependencies — and without needing
 `snapcraft` or LXD. Run it as a fast gate before the two full end-to-end pipeline runs.
 
-`examples/` holds valid source, OCI, and diagnostics-only validation instances — used by
-`--self-test` and handy as copy-paste templates.
+`examples/` holds one valid instance of each file in each mode (`*.oci.json`,
+`*.source.json`) — used by `--self-test` and handy as copy-paste templates.
