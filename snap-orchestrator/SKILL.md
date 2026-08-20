@@ -46,7 +46,7 @@ producer/consumer still interoperates.
 |---|---|---|---|
 | `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input |
 | `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest (packager is the sole writer) |
-| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + (OCI) devmode / store-review / reproducibility findings |
+| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + store-review findings (every run) + (OCI) devmode / reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,

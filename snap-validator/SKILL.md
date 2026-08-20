@@ -5,9 +5,9 @@ description: >
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
   denials via snappy-debug. Records denials in snap-validation-results.json for
   snap-packager to act on — never patches snapcraft.yaml directly. Hard-stops for classic
-  confinement. For OCI-derived snaps it also runs a devmode-first crash check, flags
-  store-review-only interfaces, selects an architecture-appropriate test environment, and
-  reports rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
+  confinement. Flags store-review-only interfaces for every snap. For OCI-derived snaps it
+  also runs a devmode-first crash check, selects an architecture-appropriate test
+  environment, and reports rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
   test snap in LXD, snap AppArmor denials, snap security testing, find snap plugs, snap
   confinement issues, snappy-debug scan, snap runtime testing, snap permissions audit,
   snapcraft.yaml interfaces, snap seccomp denial, snap access denied, devmode crash check,
@@ -16,8 +16,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.1.0"
-  summary: "Runs a snap in LXD and reports AppArmor/SecComp denials (plus devmode, store-review, and reproducibility findings for OCI snaps) — never patches yaml."
+  version: "1.2.0"
+  summary: "Runs a snap in LXD: reports denials, devmode, store-review interfaces, and arch-aware test env; OCI reproducibility — never patches yaml."
   tags:
     - snap
     - snapcraft
@@ -37,10 +37,13 @@ plugs that are actually required. Classic-confinement snaps are excluded.
 > patches and rebuilds. This is true for every phase below, including the OCI reproducibility
 > phase, which only computes and reports the diff.
 
-**OCI mode.** For OCI-derived snaps the base flow is wrapped with three extra behaviors — a
-**devmode-first crash check** before the strict scan (§3.2), **store-review-only interface
-detection** + **architecture-aware environment selection** during the strict scan (§3.3),
-and a **rootfs reproducibility diff** once confinement is clean (§3.4). All are gated on OCI
+**Every run** (OCI or source-built) gets a **store-review-only interface cross-check**
+during the strict scan (§3.4) — a pure lookup-table check with no OCI dependency.
+
+**OCI mode.** For OCI-derived snaps the base flow is additionally wrapped with extra
+behaviors — a **devmode-first crash check** before the strict scan (§3.2),
+**architecture-aware environment selection** during the strict scan (§3.3), and a
+**rootfs reproducibility diff** once confinement is clean (§3.4). These remain gated on OCI
 mode and all remain report-only. In the base (source-code) case none of them run and the
 output is byte-for-byte the original single-pass strict flow with the new fields null.
 
@@ -200,9 +203,10 @@ For every denial captured, record:
 Consult `references/denial-to-interface.md` when snappy-debug gives no explicit
 suggestion — it maps common denial patterns to the correct snap interface.
 
-### 3.4 Store-review-only interface detection (OCI mode)
+### 3.4 Store-review-only interface detection
 
-> **OCI mode only.** Skip in the base case.
+Runs for every snap, OCI or source-built — this is a pure lookup-table check against
+whatever interfaces are already being suggested/declared, with no OCI dependency.
 
 Cross-reference every interface that was **denial-suggested** (Step 3.3) or already
 **declared** in `snapcraft.yaml` against the known store-review-only list — interfaces that
@@ -263,8 +267,11 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
   `message`; keep `denials[]` exclusively for valid denial objects.
 - **OCI fields:** set `oci_mode: true` in OCI mode. `devmode_pass` is `true`/`false` from
   Step 2.5 (or `null` in the base case); `target_arch` from `oci.target_arch`;
-  `test_environment_used` from Step 2.0; `store_review_interfaces[]` from Step 3.4.
-  `reproducibility` is populated only by Step 3.5 (below), otherwise `null`.
+  `test_environment_used` from Step 2.0. `reproducibility` is populated only by Step 3.5
+  (below), otherwise `null`.
+- **`store_review_interfaces[]`** is populated from Step 3.4 for every run, OCI or
+  source-built — it stays `[]` only when the snap genuinely needs none of the four
+  store-review-only interfaces.
 - When `devmode_pass: false`, write the results and stop after Step 2.5 — `clean` reflects
   that the strict scan did not run (leave `denials: []`); the build fix is the caller's job.
 

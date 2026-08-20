@@ -9,7 +9,8 @@ The living definition of the two JSON files the `snap-orchestrator` sub-agents e
   `snap-packager` (patch mode) and `snap-orchestrator`. Schema **1.1** = schema 1.0 **plus**
   the optional diagnostics and OCI fields (`diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`, `target_arch`,
   `test_environment_used`, `store_review_interfaces`, `reproducibility`), all null/empty in
-  the source-code case.
+  the source-code case. `store_review_interfaces` is populated for every run (OCI or source)
+  and stays empty only when the snap needs none of the store-review-only interfaces.
 
 Both bumps are **additive**: a schema-1.0 producer/consumer still interoperates.
 
