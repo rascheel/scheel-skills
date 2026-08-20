@@ -15,7 +15,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.3.0"
+  version: "1.4.0"
   summary: "End-to-end snap pipeline for source or OCI input: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
   tags:
     - snap
@@ -38,21 +38,23 @@ when its phase is done. The orchestrator manages control flow and the patch loop
 
 The sub-agents communicate exclusively through these files. `snap-analysis.json` is a
 transient hand-off artifact and lives under `/tmp` (project-scoped:
-`/tmp/snap-analysis-$(basename "$PWD").json`); the rest live in the project root. Both JSON
-files are at **schema `1.1`** — additive over `1.0` (new optional fields only), so a `1.0`
+`/tmp/snap-analysis-$(basename "$PWD").json`); the rest live in the project root.
+`snap-analysis.json` is at schema **`1.2`**; `snap-validation-results.json` is at schema
+**`1.1`** — both additive over their prior versions (new optional fields only), so an older
 producer/consumer still interoperates.
 
 | File | Written by | Read by | Purpose |
 |---|---|---|---|
-| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input |
+| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input, a top-level `target_arch` marks a non-host source build |
 | `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest (packager is the sole writer) |
 | `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + devmode / store-review findings (every run) + (OCI) reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,
 > `docker save` tarball, or pre-extracted `config.json`+`rootfs/`). Both emit the same
-> `snap-analysis.json` contract; container input adds an `oci` block. Phase 0 selects; every
-> later phase is producer-agnostic.
+> `snap-analysis.json` contract; container input adds an `oci` block (with its own
+> `oci.target_arch`), source input may add a top-level `target_arch` (Phase 0.1a). Phase 0
+> selects; every later phase is producer-agnostic.
 
 ---
 
@@ -87,6 +89,19 @@ ls *.tar 2>/dev/null                  # docker save tarball
 - **Otherwise** (a source-code project) → **source path** (`snap-analyzer`).
 - **Ambiguous** (both source files and an image reference, or neither) → ask the user which
   they want to package.
+
+### 0.1a Target-architecture pre-flight (source path only)
+
+Source-path snaps have no built-in architecture signal (unlike OCI images, whose metadata
+gives `snap-oci-analyzer` an authoritative arch). Ask once, up front: **build for the host
+architecture unless told otherwise.** Default to the host arch (`dpkg --print-architecture`)
+without asking if the user's request doesn't mention cross-compilation, an IoT/embedded
+target, or a specific non-host architecture; ask explicitly only when the request is
+ambiguous about target hardware. Record the answer — `null` for "host architecture" or one
+of `amd64`/`arm64`/`armhf`/`i386`/`ppc64el`/`s390x`/`riscv64` — and pass it to
+`snap-analyzer` in Phase 1 so it lands in `snap-analysis.json`'s top-level `target_arch`
+field. **No-op on the OCI path** — `snap-oci-analyzer`'s `oci.target_arch` inference already
+covers it; skip this step entirely when Phase 0.1 selected the OCI path.
 
 ### 0.2 OCI dependency check (OCI path only)
 
@@ -129,10 +144,13 @@ Provide this context to the sub-agent:
 - Goal: write the analysis to `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`)
 - **OCI path:** also pass the input (Docker Hub URL / image reference / tarball path, or
   the pre-extracted `config.json`+`rootfs/`) so the analyzer can download/extract.
+- **Source path:** also pass the Phase 0.1a target-arch answer so it lands in the analysis's
+  top-level `target_arch` field.
 
 Wait until `$ANALYSIS_FILE` is present and contains valid JSON before continuing. The
 `snap-oci-analyzer` output additionally carries an `oci` block (schema `1.1`); the
-`snap-analyzer` output does not — every later phase treats both uniformly.
+`snap-analyzer` output may instead carry a top-level `target_arch` (schema `1.2`) when a
+non-host architecture was requested — every later phase treats both uniformly.
 
 If `$ANALYSIS_FILE` reports `"confinement": "classic"`, the user has already been
 prompted and confirmed classic confinement during the analysis phase. Skip the validation
@@ -202,9 +220,9 @@ Read `snap-validation-results.json`, and branch on the *kind* of result:
    counter, and return to **Step 3.1**. If the counter = 3, exit the loop to Phase 4 and
    report the devmode failure separately (do **not** count these against the 5-iteration
    denial cap).
-3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
+ 3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
    (reproducibility); otherwise go to **Phase 4**.
-3. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
+4. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
    if = 5, exit the loop to Phase 4 carrying the unresolved denials for the final report.
 
 ### 3.4 Delegate to: `snap-packager` (patch mode)
@@ -260,7 +278,7 @@ Present a consolidated summary to the user.
 | Analyzer used | `snap-analyzer` (source) or `snap-oci-analyzer` (OCI) |
 | Confinement | `<snap.confinement>` |
 | Plugin | `<build.plugin>` |
-| Target architecture | `<oci.target_arch>` (OCI) or `—` |
+| Target architecture | `<oci.target_arch>` (OCI), `<target_arch>` (source, if non-host), or `—` (host arch) |
 | Denial-patch iterations | `<N>` |
 | Devmode | ✅ pass / ⚠️ failed after 3 build-fix attempts |
 | Store-review-only interfaces | list from `store_review_interfaces[]`, or `None` |
@@ -321,6 +339,7 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 | Devmode build-fix loop exhausted (3 attempts) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
 | Reproducibility loop exhausted (3 iterations, OCI) | Exit to Phase 4; list unresolved diffs in the "Unresolved Reproducibility Diffs" section |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
+| Validator reports diagnostics | Stop; show each diagnostic; fix the reported pre-flight failure before rerunning validation |
 | LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement confirmed after Phase 1 | Skip Phase 3; proceed to the Final Report (Phase 4); remind user of Store approval requirement and Ubuntu Core incompatibility |
 | `.snap` file missing after snap-packager runs | Stop; show the last build output |

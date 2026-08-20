@@ -1,5 +1,6 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
+  "target_arch": null,
   "project": {
     "name": "hello-cli",
     "version": "1.0.0",

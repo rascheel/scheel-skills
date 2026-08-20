@@ -2,11 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://canonical.com/snap-orchestrator/snap-analysis.schema.json",
   "title": "snap-analysis.json",
-  "description": "Hand-off contract written by snap-analyzer (source) or snap-oci-analyzer (OCI) and consumed by snap-packager. Schema 1.1 is additive over 1.0: the only new element is the optional top-level 'oci' block.",
+  "description": "Hand-off contract written by snap-analyzer (source) or snap-oci-analyzer (OCI) and consumed by snap-packager. Schema 1.1 is additive over 1.0: the only new element is the optional top-level 'oci' block. Schema 1.2 is additive over 1.1: adds the optional top-level 'target_arch' field for cross-architecture source builds (OCI analyses keep using 'oci.target_arch' instead).",
   "type": "object",
   "required": ["schema_version", "project", "snap", "build", "apps", "hooks", "layouts", "interfaces", "notes"],
   "properties": {
-    "schema_version": { "enum": ["1.0", "1.1"] },
+    "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
     "project": {
       "type": "object",
       "required": ["name", "version", "summary", "description", "grade"],
@@ -69,6 +69,10 @@
       }
     },
     "notes": { "type": "array", "items": { "type": "string" } },
+    "target_arch": {
+      "description": "Present only for schema 1.2 general (non-OCI) analyses that target a non-host architecture. Null/absent means build for the host architecture. OCI analyses use 'oci.target_arch' instead, never this field.",
+      "enum": ["amd64", "arm64", "armhf", "i386", "ppc64el", "s390x", "riscv64", null]
+    },
 
     "oci": {
       "type": "object",

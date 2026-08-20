@@ -12,8 +12,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.1.1"
-  summary: "Scans a codebase and writes snap-analysis.json to /tmp — a structured packaging specification consumed by snap-packager."
+  version: "1.2.0"
+  summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snap-packager, including target_arch for cross-arch builds."
   tags:
     - snap
     - snapcraft
@@ -208,7 +208,8 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
       "reason": "<one sentence>"
     }
   ],
-  "notes": ["<any packaging caveat or assumption worth flagging>"]
+  "notes": ["<any packaging caveat or assumption worth flagging>"],
+  "target_arch": null
 }
 ```
 
@@ -220,6 +221,11 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 - `hooks`: empty array `[]` when no hooks are needed
 - `notes`: include classic-confinement store-review warning if applicable; include any
   assumption that the packager cannot verify without reading the source
+- `target_arch`: `null` means build for the host architecture (the default — leave it `null`
+  unless a non-host architecture was explicitly requested). When the caller
+  (`snap-orchestrator`'s Phase 0.1a) provides a target architecture, or the user names one
+  directly, record it as one of `amd64`/`arm64`/`armhf`/`i386`/`ppc64el`/`s390x`/`riscv64`
+  and set `schema_version` to `"1.2"` — otherwise leave `schema_version` at `"1.0"`
 
 ---
 

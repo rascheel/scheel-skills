@@ -5,9 +5,9 @@ description: >
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
   denials via snappy-debug. Records denials in snap-validation-results.json for
   snap-packager to act on — never patches snapcraft.yaml directly. Hard-stops for classic
-  confinement. Runs a devmode-first crash check and flags store-review-only interfaces for
-  every snap. For OCI-derived snaps it also selects an architecture-appropriate test
-  environment and reports rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
+  confinement. Runs a devmode-first crash check, flags store-review-only interfaces, and
+  selects an arch-appropriate test environment for any cross-architecture build (OCI or
+  general). Also reports OCI rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
   test snap in LXD, snap AppArmor denials, snap security testing, find snap plugs, snap
   confinement issues, snappy-debug scan, snap runtime testing, snap permissions audit,
   snapcraft.yaml interfaces, snap seccomp denial, snap access denied, devmode crash check,
@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.3.0"
+  version: "1.4.0"
   summary: "Runs a snap in LXD: reports denials, devmode, store-review interfaces, and arch-aware test env; OCI reproducibility — never patches yaml."
   tags:
     - snap
@@ -66,11 +66,14 @@ Read `snap/snapcraft.yaml` and extract:
 Read `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`) when the caller
 provides it — `snap-orchestrator` passes this path. **OCI mode is true iff the analysis
 file's top-level `oci` key is present.** If the analysis file was not passed, fall back to
-detecting a `rootfs/` directory in the project root as a secondary signal. When OCI mode is
-true, also read `oci.target_arch` and `oci.reproducibility_baseline` — the arch-selection
-(§2.0) and reproducibility (§3.5) phases need them. §2.5 (devmode) and §3.4 (store-review)
-run regardless of OCI mode. In non-OCI mode, skip §2.0 and §3.5 entirely, and leave
-`target_arch`, `test_environment_used`, and `reproducibility` at their null defaults (§4.2).
+detecting a `rootfs/` directory in the project root as a secondary signal. Resolve an
+**effective target architecture**: `oci.target_arch` in OCI mode, otherwise the analysis
+file's top-level `target_arch` (schema 1.2, general path) if present — either feeds the
+arch-selection phase (§2.0). When OCI mode is true, also read `oci.reproducibility_baseline`
+— only the reproducibility phase (§3.5) needs it and stays OCI-only. §2.5 (devmode) and §3.4
+(store-review) run regardless of OCI mode. When there is no effective target architecture
+(host-arch build, either mode), skip §2.0's cross-arch handling and leave `target_arch`/
+`test_environment_used` at their null defaults (§4.2); always skip §3.5 outside OCI mode.
 
 ### 1.2 Classic confinement gate
 
@@ -94,16 +97,20 @@ Provision a clean container and install prerequisites. Replace `<snap-file>` wit
 actual `.snap` filename found in the working directory. If no `.snap` exists, ask the
 user to build one first (`snapcraft`).
 
-### 2.0 Architecture-aware environment selection (OCI mode)
+### 2.0 Architecture-aware environment selection
 
-When OCI mode is on and `oci.target_arch` **does not match the host architecture**, a plain
-native `lxc launch ubuntu:24.04` cannot run the snap. Select the test environment using the
-decision tree in `references/build-environments.md` (native LXD when arch matches; an LXD
-remote on matching hardware; full-system emulation with snapd; or a QEMU/binfmt smoke test
-when only a shallow "does it start" check is possible). Record the choice as
-`test_environment_used` (e.g. `"native-lxd"`, `"lxd-remote"`, `"qemu-user-static"`,
-`"image-garden"`). In non-OCI mode, or when arch matches the host, use native LXD and set
-`test_environment_used` to `"native-lxd"` (OCI) or leave it `null` (non-OCI).
+When the effective target architecture (§1.1a — `oci.target_arch` in OCI mode, or the
+general-path top-level `target_arch`) is set and **does not match the host architecture**, a
+plain native `lxc launch ubuntu:24.04` cannot run the snap. Select the test environment
+using the decision tree in `references/build-environments.md` (native LXD when arch
+matches; an LXD remote on matching hardware; full-system emulation with snapd; or a
+QEMU/binfmt smoke test when only a shallow "does it start" check is possible). Record the
+choice as `test_environment_used` (e.g. `"native-lxd"`, `"lxd-remote"`,
+`"qemu-user-static"`, `"image-garden"`). When an effective target architecture is set (OCI
+mode, or a general-path `target_arch`) and matches the host, use native LXD and set
+`test_environment_used` to `"native-lxd"`. When there is **no** effective target
+architecture at all — the common general-path case, no `oci` block and no `target_arch`
+field — this phase has nothing to act on; leave `test_environment_used` `null`.
 
 ```bash
 # Native LXD (arch matches host) — the default
@@ -248,6 +255,7 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
       "raw_denial": "<full AppArmor/SecComp log line>"
     }
   ],
+  "diagnostics": [],
 
   "oci_mode": false,
   "devmode_pass": null,
@@ -271,8 +279,10 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
 - **`store_review_interfaces[]`** is populated from Step 3.4 for every run, OCI or
   source-built — it stays `[]` only when the snap genuinely needs none of the four
   store-review-only interfaces.
-- **OCI-only fields:** set `oci_mode: true` in OCI mode. `target_arch` from
-  `oci.target_arch`; `test_environment_used` from Step 2.0. `reproducibility` is populated
+- **`target_arch`/`test_environment_used`** come from Step 2.0's effective target
+  architecture (§1.1a) — `oci.target_arch` in OCI mode, or the general-path `target_arch` —
+  and stay `null` when there is no effective target architecture at all.
+- **OCI-only fields:** set `oci_mode: true` in OCI mode. `reproducibility` is populated
   only by Step 3.5 (below), otherwise `null`.
 - When `devmode_pass: false`, write the results and stop after Step 2.5 — `clean` reflects
   that the strict scan did not run (leave `denials: []`); the build fix is the caller's job.
@@ -353,14 +363,14 @@ lxc delete --force snap-test-env
 
 | Situation | Action |
 |---|---|
-| No `.snap` file found | Write `snap-validation-results.json` with `"clean": false` and a note in `denials`; stop |
+| No `.snap` file found | Write `snap-validation-results.json` with `"clean": false`, `denials: []`, and a `missing-snap` diagnostic; stop |
 | LXD not installed or unavailable | Stop: "lxc is not available on this system" |
 | `snap install` fails | Report exact error; do not continue |
 | Denial with no snappy-debug suggestion | Read `references/denial-to-interface.md` |
 | Container creation fails | Try `ubuntu:noble` as an alternative image |
 | `cloud-init` times out | Wait 60 s and retry; if still failing, recreate container |
 | Devmode start fails | Set `devmode_pass: false` + `devmode_notes[]`; stop before strict scan; caller runs the build-fix branch |
-| Target arch ≠ host (OCI) | Select an environment per `references/build-environments.md`; record `test_environment_used` |
+| Target arch ≠ host (OCI or general path) | Select an environment per `references/build-environments.md`; record `test_environment_used` |
 | Original image not reproducible (OCI) | Set `reproducibility.checked: false`; note the reason; do not fail the run |
 
 ---
@@ -370,5 +380,5 @@ lxc delete --force snap-test-env
 | File | Purpose |
 |---|---|
 | `references/denial-to-interface.md` | Maps AppArmor denial patterns to snap interface names |
-| `references/install-and-verify.md` | Devmode install, ELF-crash pattern, `snap try`, store-review-only interface identification (OCI mode) |
+| `references/install-and-verify.md` | Devmode install, ELF-crash pattern, `snap try`, store-review-only interface identification |
 | `references/build-environments.md` | Architecture-aware test-environment decision tree (OCI cross-arch) |

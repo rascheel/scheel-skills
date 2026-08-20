@@ -14,7 +14,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.2"
+  version: "1.3.0"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -75,7 +75,7 @@ do not re-inspect the source code. The fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `"1.0"` or `"1.1"`; `"1.1"` may carry an `oci` block |
+| `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), or `"1.2"` (may carry a top-level `target_arch`) |
 | `project.*` | Snap name, version, summary, description, license, grade |
 | `snap.base` | Always `core24` |
 | `snap.confinement` | `strict` or `classic` |
@@ -88,6 +88,7 @@ do not re-inspect the source code. The fields are:
 | `layouts` | Path remapping entries |
 | `interfaces[].auto_connected` | Drives whether a `snap connect` command appears in SNAP_PACKAGING.md |
 | `notes[]` | Caveats to surface in the chat summary and SNAP_PACKAGING.md |
+| `target_arch` (top-level, general path) | Non-null triggers a `platforms:` stanza — same rendering as `oci.target_arch` below, mutually exclusive with it |
 
 **OCI-mode detection:** if the top-level `oci` key is present, this analysis describes a
 container image; switch Step 2a into **OCI rendering mode** and read these additional
@@ -125,6 +126,16 @@ Translate every field from `snap-analysis.json` — do not leave placeholder com
   `craftctl default` followed by the extra commands.
 - Merge `build.plugin_config` keys directly into the part's YAML fields.
 - Emit `apps[].environment` entries only when the environment map is non-empty.
+- If the top-level `target_arch` field is non-null, emit the same `platforms:` stanza
+  documented for OCI mode below:
+  ```yaml
+  platforms:
+    <target_arch>:
+      build-on: [<target_arch>]
+      build-for: [<target_arch>]
+  ```
+  Omit `platforms:` entirely when `target_arch` is `null` (the common host-arch case) —
+  snapcraft already defaults to the host architecture without it.
 
 **`snap/hooks/<hook-name>`**
 One shell script per hook named in `hooks[]`. Consult `references/snap-hooks-reference.md`
@@ -141,6 +152,8 @@ Include:
 6. How to submit to the Snap Store (optional, if the app looks store-ready)
 7. Common troubleshooting (AppArmor denials via `snap run --shell`, `journalctl -xe`)
 8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
+9. If `target_arch` is non-null, note the target architecture and that the `platforms:`
+   stanza already pins it — no `--build-for` flag is needed on `snapcraft pack`
 
 ### Step 2a (OCI variant): OCI rendering mode
 
@@ -338,6 +351,9 @@ After the build succeeds, summarize in the chat:
   `platforms:` stanza from `oci.target_arch`, and render system-usernames / overrides /
   content interfaces / config hooks from the `oci.*` facts. Never use `LD_LIBRARY_PATH` for
   a glibc mismatch — use RPATH embedding via the generated `build_scripts/embed_rpath.sh`.
+- **General path cross-compilation** (top-level `target_arch` non-null): add the same
+  `platforms:` stanza, keyed on `target_arch` instead of `oci.target_arch` — otherwise
+  identical rendering. Omit `platforms:` when `target_arch` is `null`.
 - Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
 - Never use `devmode` in generated files — it is a testing-only aid
 - If the app has multiple binaries or services, model each as a separate entry under `apps`
