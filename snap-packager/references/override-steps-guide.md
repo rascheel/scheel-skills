@@ -88,7 +88,7 @@ override-build: |
   # craftctl default copies $CRAFT_PART_BUILD → $CRAFT_PART_INSTALL
   craftctl default
 
-  # Mutations on config files, nginx.conf, etc. go HERE — after craftctl default
+  # Mutations on config files (e.g. myapp.conf) go HERE — after craftctl default
   # so $CRAFT_PART_INSTALL is fully populated.
   CONF="$CRAFT_PART_INSTALL/etc/myapp/myapp.conf"
   if [ -f "$CONF" ]; then
@@ -547,7 +547,7 @@ Choose whichever keeps the recipe most readable:
 
 ## Using `patch_snapcraft.py` to Apply Override Steps
 
-The `scripts/patch_snapcraft.py` script supports adding override steps directly:
+`scripts/patch_snapcraft.py` supports adding override steps directly:
 
 ```bash
 # Dry run — review before applying

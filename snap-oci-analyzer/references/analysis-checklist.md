@@ -218,7 +218,7 @@ Is the path's content shipped inside the snap image (rootfs)?
 ### ⚠️ Validate each candidate layout target against the constraints
 
 **Before recording a path as a layout**, check it against
-`references/layout-constraints.md` (or rely on `scripts/patch_snapcraft.py`,
+`references/layout-constraints.md` (or rely on `snap-packager`'s `scripts/patch_snapcraft.py`,
 which warns and skips any forbidden target rather than failing):
 
 1. Is the target in the explicit denylist?  → **forbidden**, investigate workaround.
@@ -261,7 +261,8 @@ Produce a markdown table mapping each OCI item to its snap construct:
 | … | … | … | … |
 
 ### 6b. snapcraft.yaml snippet
-Use `assets/snapcraft-snippet-template.yaml` as the base. Populate:
+Use `snap-packager/assets/snapcraft.yaml.template`'s `plugs:` and `layout:` sections as
+the base. Populate:
 - `plugs:` list under the app or at top level
 - `layout:` section with all discovered path mappings
 

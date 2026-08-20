@@ -14,7 +14,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.0"
+  version: "1.2.1"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -285,6 +285,19 @@ snapcraft pack 2>&1
 1. Read the full error output carefully — snapcraft errors are usually precise about the cause.
 2. Fix the issue in the relevant file (`snap/snapcraft.yaml`, a hook, or source).
 3. Run `snapcraft pack` again. Repeat until the build produces a `.snap` file with no errors.
+
+**If the error output alone isn't enough to diagnose the failure**, drop into the LXD
+build instance instead of guessing: `snapcraft pack --shell-after` opens a shell after
+the build steps run (inspect what actually landed in `$SNAPCRAFT_PART_INSTALL`);
+`snapcraft pack --shell` opens one before they run (inspect the fetched sources/build
+environment). Both work for any build, not just failures — use them whenever text
+output leaves the cause ambiguous.
+
+**When only an `override-build`/`override-prime` command or a hook script changed**,
+clean just the affected part (`snapcraft clean <part> --use-lxd`) before rebuilding
+instead of a full `snapcraft clean --use-lxd`. A full clean re-fetches every part's
+sources and can still reuse a stale cached copy of a changed script if the part itself
+isn't explicitly reset; a selective clean is faster and avoids that trap.
 
 **Common failures and fixes:**
 

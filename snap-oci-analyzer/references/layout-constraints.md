@@ -123,7 +123,7 @@ Given a candidate target path T:
 
 ## 4. Workarounds for forbidden targets
 
-The `scripts/patch_snapcraft.py` script **warns and skips** any layout whose
+The `snap-packager`'s `scripts/patch_snapcraft.py` **warns and skips** any layout whose
 target fails validation — it never hard-errors on a forbidden path. The
 remaining valid layouts are still applied.
 

@@ -61,5 +61,5 @@ Record one fact per role. Provider and consumer entries must use the same
   instead.
 
 `snap-packager` renders these facts. Read its
-`references/content-interface-guide.md` for the exact slot/plug YAML and runtime
+`snap-packager/references/content-interface-guide.md` for the exact slot/plug YAML and runtime
 connection commands; do not write `snapcraft.yaml` from this skill.

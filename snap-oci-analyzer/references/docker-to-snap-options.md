@@ -237,6 +237,6 @@ python3 <skill-dir>/scripts/ensure_dependencies.py --install -y
 ```
 
 The helper checks `tar`, `skopeo`, `umoci`, `jq`, and the Python YAML library
-used by `scripts/patch_snapcraft.py`. If `docker-to-snap` still exits with a
+used by `snap-packager`'s `scripts/patch_snapcraft.py`. If `docker-to-snap` still exits with a
 clear error listing missing tools, run the helper once more and retry the
 original `docker-to-snap` command. Report the exact stderr if the retry fails.
