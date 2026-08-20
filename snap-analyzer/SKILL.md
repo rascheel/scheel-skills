@@ -12,7 +12,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.1.0"
+  version: "1.1.1"
   summary: "Scans a codebase and writes snap-analysis.json to /tmp — a structured packaging specification consumed by snap-packager."
   tags:
     - snap
@@ -62,6 +62,9 @@ Record findings for:
 - **Hardcoded paths** — `/etc/<name>`, `/var/lib/<name>`, `/run/<name>`, etc.
 - **Version** — from `go.mod`, `package.json`, `CMakeLists.txt`, `setup.py`, a `VERSION`
   file, or the most recent git tag
+- **Shipped script interpreters** — shebang lines on any helper script that ends up in the
+  shipped `apps[]` surface, cross-checked against the build-system-inferred `stage_packages`
+  (see the checklist's shebang item)
 
 ---
 

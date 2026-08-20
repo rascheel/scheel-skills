@@ -23,6 +23,11 @@ Work through each section. Record findings — they drive every decision in snap
 - [ ] Pre-compiled binary already in repo? → `dump` plugin candidate
 - [ ] Shell scripts only, no build step? → `dump` plugin (or `nil` with `cp` in `override-build` if files need transformation)
 - [ ] What runtime version is required? (`.python-version`, `.nvmrc`, `go.mod go 1.X`, etc.)
+- [ ] Do any shipped helper scripts have a `#!/usr/bin/perl`, `#!/usr/bin/env python3`, or
+  similar interpreter shebang? Check whether that interpreter is already pulled in by the
+  detected build system (the plugin table in section 2) — if not, add a `notes[]` entry
+  flagging the missing `stage-packages` dependency (e.g. a `#!/usr/bin/perl` helper shipped
+  alongside a Go binary, with no Perl toolchain anywhere in the build).
 
 ---
 
