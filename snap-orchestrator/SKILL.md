@@ -15,8 +15,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.0"
-  summary: "End-to-end snap pipeline for source-code or OCI/container input: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
+  version: "1.3.0"
+  summary: "End-to-end snap pipeline for source or OCI input: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
   tags:
     - snap
     - snapcraft
@@ -46,7 +46,7 @@ producer/consumer still interoperates.
 |---|---|---|---|
 | `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input |
 | `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest (packager is the sole writer) |
-| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + store-review findings (every run) + (OCI) devmode / reproducibility findings |
+| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + devmode / store-review findings (every run) + (OCI) reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,
@@ -167,7 +167,7 @@ Three independently-capped counters run in this phase; track each separately:
 | Counter | Cap | Trigger |
 |---|---|---|
 | Denial-patch iterations | **5** | `clean: false` with denials |
-| Devmode build-fix iterations (OCI) | **3** | `devmode_pass: false` |
+| Devmode build-fix iterations | **3** | `devmode_pass: false` |
 | Reproducibility iterations (OCI, Phase 3.5) | **3** | non-empty `reproducibility.diffs[]` |
 
 ### 3.1 Delete previous results
@@ -195,15 +195,16 @@ Read `snap-validation-results.json`, and branch on the *kind* of result:
 
 1. **`diagnostics[]` is non-empty** → stop and report the diagnostics. These are validation
    pre-flight failures (for example, a missing `.snap`), not denial-patch candidates.
-2. **`devmode_pass == false`** (OCI mode) → this is a **build-correctness** failure, not a
-   denial. If the devmode build-fix counter < 3, delegate to `snap-packager`'s **build-fix
-   branch** (Step 2b case (c) — consumes `devmode_notes[]`, does **not** touch
-   plugs/layouts), rebuild, increment the devmode counter, and return to **Step 3.1**. If
-   the counter = 3, exit the loop to Phase 4 and report the devmode failure separately (do
-   **not** count these against the 5-iteration denial cap).
+2. **`devmode_pass == false`** → this is a **build-correctness** failure, not a
+   denial — can arise for any snap, OCI or source-built. If the devmode build-fix counter
+   < 3, delegate to `snap-packager`'s **build-fix branch** (Step 2b case (c) — consumes
+   `devmode_notes[]`, does **not** touch plugs/layouts), rebuild, increment the devmode
+   counter, and return to **Step 3.1**. If the counter = 3, exit the loop to Phase 4 and
+   report the devmode failure separately (do **not** count these against the 5-iteration
+   denial cap).
 3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
    (reproducibility); otherwise go to **Phase 4**.
-4. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
+3. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
    if = 5, exit the loop to Phase 4 carrying the unresolved denials for the final report.
 
 ### 3.4 Delegate to: `snap-packager` (patch mode)
@@ -261,7 +262,7 @@ Present a consolidated summary to the user.
 | Plugin | `<build.plugin>` |
 | Target architecture | `<oci.target_arch>` (OCI) or `—` |
 | Denial-patch iterations | `<N>` |
-| Devmode | ✅ pass / ⚠️ failed after 3 build-fix attempts / `—` (non-OCI) |
+| Devmode | ✅ pass / ⚠️ failed after 3 build-fix attempts |
 | Store-review-only interfaces | list from `store_review_interfaces[]`, or `None` |
 | Reproducibility | ✅ clean / ⚠️ N unresolved diffs after 3 iterations / `—` (non-OCI) |
 | Final status | ✅ Clean — no denials / ⚠️ Unresolved denials after 5 iterations |
@@ -282,7 +283,7 @@ Present a consolidated summary to the user.
 List every interface from `$ANALYSIS_FILE` where `"auto_connected": false`, with the
 exact `snap connect <snap-name>:<plug> :<interface>` command for each.
 
-### Store-Review-Only Interfaces (OCI mode, if any)
+### Store-Review-Only Interfaces (if any)
 
 If `store_review_interfaces[]` is non-empty, list each interface and the app that needs it,
 and warn that these (`snapd-control`, `system-files`, `docker-support`,
@@ -317,10 +318,9 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 | snap-analyzer / snap-oci-analyzer fails or produces invalid JSON | Stop; show the error; ask user to check the project or image reference |
 | OCI dependencies unresolvable (`skopeo`/`umoci`/`jq`) | Stop; show `ensure_dependencies.py` stderr; the OCI path cannot proceed without them |
 | snap-packager build fails after 3 rebuild attempts | Stop; show the last `snapcraft pack` error output |
-| Devmode build-fix loop exhausted (3 attempts, OCI) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
+| Devmode build-fix loop exhausted (3 attempts) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
 | Reproducibility loop exhausted (3 iterations, OCI) | Exit to Phase 4; list unresolved diffs in the "Unresolved Reproducibility Diffs" section |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
-| Validator reports diagnostics | Stop; show each diagnostic; fix the reported pre-flight failure before rerunning validation |
 | LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement confirmed after Phase 1 | Skip Phase 3; proceed to the Final Report (Phase 4); remind user of Store approval requirement and Ubuntu Core incompatibility |
 | `.snap` file missing after snap-packager runs | Stop; show the last build output |

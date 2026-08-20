@@ -14,7 +14,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.1"
+  version: "1.2.2"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -63,8 +63,8 @@ skill) and produces:
 
 > **Patch mode:** If `snap-validation-results.json` is present in the project root with
 > `"clean": false`, skip to **Step 2b** — patch `snap/snapcraft.yaml` based on the results
-> (denials, and — in OCI mode — devmode/reproducibility findings) and then rebuild. Steps 1
-> and 2a are only needed for the initial packaging run.
+> (denials and devmode findings for any snap; reproducibility findings in OCI mode) and then
+> rebuild. Steps 1 and 2a are only needed for the initial packaging run.
 
 ### Step 1: Read snap-analysis.json
 
@@ -227,11 +227,14 @@ failure (for example, build the missing `.snap` artifact) before validation is r
 '$SNAP/hardcoded/path'`. (Representable in the schema already; now an explicit Step-2b
 action.)
 
-**(c) `devmode_pass: false` → build-correctness fix** (OCI mode). This is **not** a
-confinement denial — do not touch plugs/layouts. Consume `devmode_notes[]` (e.g. ELF
-interpreter / library-layout errors) and fix the recipe: correct the interpreter-patching
-`override-build`, the `command:` path, or RPATH embedding. See the ELF-crash guidance in
-`references/glibc-compat-guide.md` / `override-steps-guide.md`.
+**(c) `devmode_pass: false` → build-correctness fix.** Can arise for any snap, OCI or
+source-built. This is **not** a confinement denial — do not touch plugs/layouts. Consume
+`devmode_notes[]` and fix the recipe at its root cause: for OCI-derived snaps this is
+typically the interpreter-patching `override-build`, the `command:` path, or RPATH
+embedding (see `references/glibc-compat-guide.md` / `override-steps-guide.md`, OCI mode);
+for source-built snaps it's more often a wrong `command:` path, a missing install step, or
+a build-system misconfiguration — trace the crash evidence in `devmode_notes[]` back to the
+part/app definition that produced it.
 
 **(d) `reproducibility.diffs[]` → override additions** (OCI mode). Each diff entry
 (`added`/`removed`/`modified`) becomes an `oci.overrides_needed`-shaped fix rendered exactly
