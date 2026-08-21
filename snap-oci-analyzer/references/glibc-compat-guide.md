@@ -121,3 +121,53 @@ on non-Ubuntu or non-x86-64 build hosts. The unconditional setting is always saf
 when glibc versions match it is a no-op; when they differ it prevents the crash.
 Combine it with the `embed_rpath.sh` build step to ensure ELF executables resolve
 their libraries via embedded RPATH and do not need `LD_LIBRARY_PATH` at all.
+
+**Do not stop at neutralising `LD_LIBRARY_PATH` and embedding RPATH.** Those two
+fixes only cover ELF *library* resolution (`dlopen`/dynamic linking). glibc has
+other subsystems that resolve from **hardcoded absolute paths** which RPATH does
+not touch at all — inside the snap's mount namespace those paths silently
+resolve to the BASE SNAP's own copy instead of the OCI image's, exactly like the
+LD_LIBRARY_PATH hazard above, just via a different mechanism. Audit each one the
+application actually uses; do not assume fixing library resolution fixed
+everything glibc-related.
+
+---
+
+## 1c.3 — Locale resolution (hardcoded path, not RPATH-affected)
+
+**Symptom:** an app that sets a non-trivial `LANG`/`LC_*` (e.g. `en_US.utf8`,
+not `C`/`C.UTF-8`) fails at startup with something like `invalid locale
+settings; check LANG and LC_* environment variables`, even though the wrapper
+correctly exports the same `LANG` value the OCI container used.
+
+**Root cause:** glibc's locale lookup reads `/usr/lib/locale/locale-archive`
+via a hardcoded absolute path — this is not an ELF library search, so
+`embed_rpath.sh`/RPATH cannot redirect it. Without a `layout:` mapping, that
+path resolves to the BASE SNAP's (core24/core26) own locale archive, not the
+OCI image's — and the base's archive very likely lacks the OCI's exact locale
+key (e.g. it has `en_US.UTF-8` but not the OCI's `en_US.utf8` — glibc locale
+keys are case- and hyphen-sensitive for this lookup).
+
+**Detection:**
+```bash
+# Does the container set a specific locale?
+jq -r '.process.env[]? | select(startswith("LANG=") or startswith("LC_"))' config.json
+
+# Does the OCI rootfs ship its own locale archive, and does it contain that
+# exact key?
+ls rootfs/usr/lib/locale/locale-archive
+localedef --list-archive rootfs/usr/lib/locale/locale-archive | grep -F "<the LANG value>"
+```
+If the container sets a specific `LANG`/`LC_*` and the OCI rootfs has its own
+`locale-archive` containing that key, this fix is needed.
+
+**Fix — add a `layout:` bind mount** (same pattern as `/var/lib/postgresql`
+elsewhere in this guide's example projects):
+```yaml
+layout:
+  /usr/lib/locale:
+    bind: $SNAP/usr/lib/locale
+```
+
+**When NOT needed:** if the container's `LANG` is unset or already `C`/`C.UTF-8`
+(present in every base snap), this fix is a no-op and can be skipped.

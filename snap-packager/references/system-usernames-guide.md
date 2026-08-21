@@ -357,6 +357,15 @@ If found, check whether the argument after the username is a script file (not a
 binary). If it is a script, apply this fix as a `sed` patch in an `override-prime`
 step or in the install hook logic.
 
+> **Note:** `create_wrapper.sh` (the generator that builds `library_wrapper.sh`) is
+> itself subject to the identical hazard one level up — it execs the OCI entrypoint
+> by path, which triggers the kernel's shebang parser for the entrypoint's own
+> `#!/usr/bin/env ...` line exactly as described above. This outer hop is now
+> resolved generically by `create_wrapper.sh` itself (it reads the entrypoint's
+> shebang and prepends the resolved interpreter explicitly), so packagers do not
+> need to hand-patch it per project — only *inner* re-exec hops like gosu's still
+> need the sed-patch treatment shown above.
+
 ---
 
 ## 9. /etc/passwd inode problem in core-base snaps
@@ -371,6 +380,42 @@ When `useradd` in the install hook creates a new user, it uses `rename()` to ato
 replace `/etc/passwd` with a new file (new inode). All snap processes — including the
 service daemon — see the OLD inode (the one captured by the bind-mount at startup) which
 does not contain the newly created user.
+
+> **⚠️ Linkage check — do this BEFORE reaching for libnss_wrapper below.**
+> `libnss_wrapper.so` works via `LD_PRELOAD`, which only affects processes that go
+> through the dynamic linker (`ld.so`). If the binary performing the username lookup
+> is **statically linked**, `LD_PRELOAD` is a complete no-op — no environment-variable
+> tweak can make it see the wrapper's NSS data. This is common for privilege-drop
+> tools written in Go (`gosu`, some `su-exec` builds) with `CGO_ENABLED=0`.
+>
+> Check every binary that will perform the lookup:
+> ```bash
+> file rootfs/usr/local/bin/gosu   # or whichever binary calls getpwnam/getpwuid
+> ldd  rootfs/usr/local/bin/gosu   # "not a dynamic executable" == statically linked
+> ```
+> - **Dynamically linked** (the common case for the target *application* binary
+>   itself, e.g. postgres/initdb) → `libnss_wrapper` below works. Proceed.
+> - **Statically linked** (common for the *privilege-drop tool* specifically,
+>   e.g. `gosu`) → `LD_PRELOAD` cannot work for that binary. Do not use
+>   libnss_wrapper for it. Instead, replace its invocation with `setpriv` using
+>   the **numeric** uid/gid (from §4b above), read directly from the OCI's own
+>   `/etc/passwd`/`/etc/group` — `setpriv --reuid <uid> --regid <uid>` performs no
+>   NSS lookup at all when given numeric ids, so it works regardless of what
+>   `/etc/passwd` the snap namespace exposes:
+>   ```bash
+>   # Before (fails inside the snap — gosu can't resolve "postgres" via NSS):
+>   exec gosu postgres "$BASH_SOURCE" "$@"
+>
+>   # After (numeric ids, no NSS lookup, works under any confinement):
+>   exec setpriv --reuid 999 --regid 999 --clear-groups -- \
+>     "$SNAP/usr/bin/bash" "$BASH_SOURCE" "$@"
+>   ```
+>   A privilege-drop replacement and a libnss_wrapper setup for the *application*
+>   binary are not mutually exclusive — apply whichever the linkage check calls
+>   for on each binary independently. (Confirmed case: `gosu` is static and needs
+>   the setpriv replacement; `postgres`/`initdb` are dynamically linked and still
+>   need libnss_wrapper for their own internal `getpwuid()` calls once running as
+>   the dropped-to uid.)
 
 **Solution: libnss_wrapper**
 
