@@ -134,7 +134,7 @@ exec "$SNAP/usr/bin/myapp" "$@"
 **Via config file mutation (`override-build`):**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   sed -i 's/^user\s*=.*/user = _daemon_/' \
     $SNAPCRAFT_PART_INSTALL/etc/myapp/myapp.conf
 ```
@@ -239,7 +239,7 @@ the privilege drop:
 
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   # Fix root-700 config dirs so _daemon_ can traverse them after privilege drop.
   find $SNAPCRAFT_PART_INSTALL/etc/myapp -type d -exec chmod 755 {} \;
 ```
@@ -312,7 +312,7 @@ parts:
     organize:
       bin/wrapper.sh: bin/wrapper.sh
     override-build: |
-      snapcraftctl build
+      craftctl default
       chmod 755 $SNAPCRAFT_PART_INSTALL/bin/wrapper.sh
 ```
 
@@ -328,8 +328,8 @@ shebang parser (because `"$BASH_SOURCE"` is the script file itself). The shebang
 `/usr/bin/env` crashes immediately with `GLIBC_X.Y not found`.
 
 **Why it happens:**
-1. `exec gosu postgres "$BASH_SOURCE" "$@"` → gosu drops to the service user,
-   then executes the script file by path.
+1. `exec gosu <service-user> "$BASH_SOURCE" "$@"` → gosu drops to the service
+   user, then executes the script file by path.
 2. The kernel reads the shebang `#!/usr/bin/env bash` and forks `env`.
 3. `env` is from the BASE SNAP (core26/core24), not from the OCI rootfs.
 4. `env` inherits `LD_LIBRARY_PATH` pointing at OCI libraries → glibc mismatch → SIGSEGV.
@@ -338,10 +338,10 @@ shebang parser (because `"$BASH_SOURCE"` is the script file itself). The shebang
 
 ```bash
 # Before (triggers kernel shebang parsing):
-exec gosu postgres "$BASH_SOURCE" "$@"
+exec gosu <service-user> "$BASH_SOURCE" "$@"
 
 # After (bypasses shebang — bash is from the OCI rootfs, not the base snap):
-exec gosu postgres "$SNAP/usr/bin/bash" "$BASH_SOURCE" "$@"
+exec gosu <service-user> "$SNAP/usr/bin/bash" "$BASH_SOURCE" "$@"
 ```
 
 **Important:** Use `$SNAP/usr/bin/bash` (the OCI rootfs bash), NOT `/bin/bash` or
@@ -371,8 +371,8 @@ step or in the install hook logic.
 ## 9. /etc/passwd inode problem in core-base snaps
 
 **Symptom:** An install hook creates the service user with `useradd`, but at runtime
-the application reports `invalid user '<username>'` when calling `find -user postgres`
-or similar utilities that look up usernames.
+the application reports `invalid user '<username>'` when calling `find -user
+<service-user>` or similar utilities that look up usernames.
 
 **Root cause (core26/core24 base):** The snap namespace sets up a `tmpfs` at `/etc`.
 The `/etc/passwd` bind-mount captures the INODE of the file **at namespace setup time**.
@@ -393,8 +393,8 @@ does not contain the newly created user.
 > file rootfs/usr/local/bin/gosu   # or whichever binary calls getpwnam/getpwuid
 > ldd  rootfs/usr/local/bin/gosu   # "not a dynamic executable" == statically linked
 > ```
-> - **Dynamically linked** (the common case for the target *application* binary
->   itself, e.g. postgres/initdb) → `libnss_wrapper` below works. Proceed.
+> - **Dynamically linked** (the common case for the target *application*
+>   binary itself) → `libnss_wrapper` below works. Proceed.
 > - **Statically linked** (common for the *privilege-drop tool* specifically,
 >   e.g. `gosu`) → `LD_PRELOAD` cannot work for that binary. Do not use
 >   libnss_wrapper for it. Instead, replace its invocation with `setpriv` using
@@ -403,8 +403,8 @@ does not contain the newly created user.
 >   NSS lookup at all when given numeric ids, so it works regardless of what
 >   `/etc/passwd` the snap namespace exposes:
 >   ```bash
->   # Before (fails inside the snap — gosu can't resolve "postgres" via NSS):
->   exec gosu postgres "$BASH_SOURCE" "$@"
+>   # Before (fails inside the snap — gosu can't resolve "<service-user>" via NSS):
+>   exec gosu <service-user> "$BASH_SOURCE" "$@"
 >
 >   # After (numeric ids, no NSS lookup, works under any confinement):
 >   exec setpriv --reuid 999 --regid 999 --clear-groups -- \
@@ -412,10 +412,10 @@ does not contain the newly created user.
 >   ```
 >   A privilege-drop replacement and a libnss_wrapper setup for the *application*
 >   binary are not mutually exclusive — apply whichever the linkage check calls
->   for on each binary independently. (Confirmed case: `gosu` is static and needs
->   the setpriv replacement; `postgres`/`initdb` are dynamically linked and still
->   need libnss_wrapper for their own internal `getpwuid()` calls once running as
->   the dropped-to uid.)
+>   for on each binary independently. (Confirmed case: a statically-linked
+>   privilege-drop tool like `gosu` needs the setpriv replacement, while a
+>   dynamically-linked application binary still needs libnss_wrapper for its own
+>   internal `getpwuid()` calls once running as the dropped-to uid.)
 
 **Solution: libnss_wrapper**
 

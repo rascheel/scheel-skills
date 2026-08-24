@@ -228,8 +228,8 @@ parts:
     plugin: nil
     source: snap/hooks
     override-prime: |
-      snapcraftctl prime
-      chmod +x $SNAPCRAFT_PRIME/snap/hooks/*
+      craftctl default
+      chmod +x $CRAFT_PRIME/snap/hooks/*
 ```
 
 ---

@@ -44,9 +44,9 @@ skipped with a WARNING rather than causing a hard failure. Forbidden paths
 are listed in references/layout-constraints.md.
 
 Override steps:
-    --override-build appends shell commands after snapcraftctl build in the named
+    --override-build appends shell commands after craftctl default in the named
     part's override-build key.  --override-prime does the same for override-prime.
-    snapcraftctl build / snapcraftctl prime are inserted automatically if not already
+    craftctl default is inserted automatically if not already
     present.  Commands already present in the step are skipped (idempotent).
 
     See references/override-steps-guide.md for pattern examples covering ELF
@@ -310,8 +310,8 @@ def patch(data: dict, app_name: str | None, plugs: list[str], layouts: list[tupl
 # ---------------------------------------------------------------------------
 
 _OVERRIDE_CTL_CALL = {
-    "override-build": "snapcraftctl build",
-    "override-prime": "snapcraftctl prime",
+    "override-build": "craftctl default",
+    "override-prime": "craftctl default",
 }
 
 
@@ -325,9 +325,9 @@ def patch_override_steps(
     Append shell commands to the override-build / override-prime keys of *part_name*.
 
     For each override key:
-      - If the key does not exist, create it with ``snapcraftctl build`` (or
-        ``snapcraftctl prime``) as the first line, followed by the new commands.
-      - If the key already exists, ensure the snapcraftctl call is present as
+      - If the key does not exist, create it with ``craftctl default`` as the
+        first line, followed by the new commands.
+      - If the key already exists, ensure the ``craftctl default`` call is present as
         the first line, then append only the commands not already present.
 
     Returns (added_build_cmds, added_prime_cmds) — commands actually inserted.
@@ -364,7 +364,7 @@ def patch_override_steps(
 
         # Parse existing step and append missing commands.
         existing_lines = existing_raw.splitlines()
-        # Ensure snapcraftctl call is the first line.
+        # Ensure the lifecycle default step is the first line.
         if ctl_call not in existing_lines:
             existing_lines.insert(0, ctl_call)
 

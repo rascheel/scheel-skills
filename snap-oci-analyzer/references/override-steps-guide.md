@@ -88,7 +88,7 @@ override-build: |
   # craftctl default copies $CRAFT_PART_BUILD → $CRAFT_PART_INSTALL
   craftctl default
 
-  # Mutations on config files, nginx.conf, etc. go HERE — after craftctl default
+  # Mutations on config files (e.g. myapp.conf) go HERE — after craftctl default
   # so $CRAFT_PART_INSTALL is fully populated.
   CONF="$CRAFT_PART_INSTALL/etc/myapp/myapp.conf"
   if [ -f "$CONF" ]; then
@@ -133,7 +133,7 @@ parts:
     plugin: dump
     source: rootfs/
     override-build: |
-      snapcraftctl build
+      craftctl default
       patchelf --set-interpreter \
         $SNAPCRAFT_PART_INSTALL/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
         $SNAPCRAFT_PART_INSTALL/usr/bin/myapp
@@ -165,7 +165,7 @@ patchelf --set-rpath '$ORIGIN/../lib' rootfs/usr/bin/myapp
 **Equivalent override-build step:**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   patchelf --set-rpath '$ORIGIN/../lib:$ORIGIN/../../lib/x86_64-linux-gnu' \
     $SNAPCRAFT_PART_INSTALL/usr/bin/myapp
 ```
@@ -207,7 +207,7 @@ load the OCI image's older libraries. Embedding RPATH avoids this entirely —
 **For bulk patching of all ET_EXEC binaries**, use `embed_rpath.sh`:
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   "$CRAFT_PROJECT_DIR"/build_scripts/patch_interpreter.sh
   "$CRAFT_PROJECT_DIR"/build_scripts/embed_rpath.sh
   "$CRAFT_PROJECT_DIR"/build_scripts/create_wrapper.sh
@@ -229,7 +229,7 @@ ln -sf /usr/lib/libfoo.so.1 rootfs/usr/lib/x86_64-linux-gnu/libfoo.so.1
 **Equivalent override-build step:**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   # Relative symlink (preferred — stays valid inside the snap)
   ln -sf libfoo.so.1.2.3 \
     $SNAPCRAFT_PART_INSTALL/usr/lib/libfoo.so.1
@@ -257,7 +257,7 @@ chmod 644 rootfs/etc/myapp/myapp.conf
 **Equivalent override-build step:**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   chmod 755 $SNAPCRAFT_PART_INSTALL/usr/bin/myapp
   chmod 644 $SNAPCRAFT_PART_INSTALL/etc/myapp/myapp.conf
 ```
@@ -278,7 +278,7 @@ sed -i 's|/usr/share/myapp|/snap/myapp/current/usr/share/myapp|g' rootfs/etc/mya
 **Equivalent override-build step (build-time variable form):**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   # Writable data → $SNAP_COMMON at runtime; use the literal string here
   sed -i 's|/var/lib/myapp|$SNAP_COMMON/myapp|g' \
     $SNAPCRAFT_PART_INSTALL/etc/myapp/myapp.conf
@@ -307,7 +307,7 @@ rm rootfs/etc/myapp/hardcoded.conf
 **Equivalent override-build step:**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   rm -f $SNAPCRAFT_PART_INSTALL/etc/myapp/hardcoded.conf
 ```
 
@@ -343,7 +343,7 @@ step:
 
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   cat > $SNAPCRAFT_PART_INSTALL/usr/bin/library_wrapper.sh <<'EOF'
   #!/bin/bash
   export LD_LIBRARY_PATH=$SNAP/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
@@ -427,7 +427,7 @@ mkdir -p rootfs/var/lib/myapp
 **Equivalent override-build step:**
 ```yaml
 override-build: |
-  snapcraftctl build
+  craftctl default
   mkdir -p $SNAPCRAFT_PART_INSTALL/var/lib/myapp
 ```
 
@@ -518,7 +518,7 @@ parts:
     plugin: dump
     source: rootfs/
     override-build: |
-      snapcraftctl build
+      craftctl default
       "$CRAFT_PROJECT_DIR"/patch_scripts/patch_interpreter.sh
       "$CRAFT_PROJECT_DIR"/patch_scripts/embed_rpath.sh
       "$CRAFT_PROJECT_DIR"/patch_scripts/fix_permissions.sh
@@ -567,7 +567,7 @@ python3 <skill-dir>/scripts/patch_snapcraft.py \
 ```
 
 **Script behaviour:**
-- Ensures `snapcraftctl build` (or `snapcraftctl prime`) is the first line.
+- Ensures `craftctl default` is the first line.
 - Skips commands already present (idempotent).
 - Creates a `.bak` backup before writing.
 - `--part` is required when using `--override-build` or `--override-prime`.
@@ -583,7 +583,7 @@ python3 <skill-dir>/scripts/patch_snapcraft.py \
 When multiple override commands are needed, order them to avoid dependency
 issues:
 
-1. `snapcraftctl build` (always first)
+1. `craftctl default` (always first)
 2. Permission fixes (`chmod`, `chown`)
 3. Symlink creation / removal
 4. Binary patching (`patchelf`)
