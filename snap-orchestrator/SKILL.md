@@ -46,7 +46,7 @@ producer/consumer still interoperates.
 |---|---|---|---|
 | `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input |
 | `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest (packager is the sole writer) |
-| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + (OCI) devmode / store-review / reproducibility findings |
+| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + (OCI) devmode / store-review / reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,
@@ -193,15 +193,17 @@ Wait until `snap-validation-results.json` is present before continuing.
 
 Read `snap-validation-results.json`, and branch on the *kind* of result:
 
-1. **`devmode_pass == false`** (OCI mode) → this is a **build-correctness** failure, not a
+1. **`diagnostics[]` is non-empty** → stop and report the diagnostics. These are validation
+   pre-flight failures (for example, a missing `.snap`), not denial-patch candidates.
+2. **`devmode_pass == false`** (OCI mode) → this is a **build-correctness** failure, not a
    denial. If the devmode build-fix counter < 3, delegate to `snap-packager`'s **build-fix
    branch** (Step 2b case (c) — consumes `devmode_notes[]`, does **not** touch
    plugs/layouts), rebuild, increment the devmode counter, and return to **Step 3.1**. If
    the counter = 3, exit the loop to Phase 4 and report the devmode failure separately (do
    **not** count these against the 5-iteration denial cap).
-2. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
+3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
    (reproducibility); otherwise go to **Phase 4**.
-3. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
+4. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
    if = 5, exit the loop to Phase 4 carrying the unresolved denials for the final report.
 
 ### 3.4 Delegate to: `snap-packager` (patch mode)
@@ -318,6 +320,7 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 | Devmode build-fix loop exhausted (3 attempts, OCI) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
 | Reproducibility loop exhausted (3 iterations, OCI) | Exit to Phase 4; list unresolved diffs in the "Unresolved Reproducibility Diffs" section |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
+| Validator reports diagnostics | Stop; show each diagnostic; fix the reported pre-flight failure before rerunning validation |
 | LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement confirmed after Phase 1 | Skip Phase 3; proceed to the Final Report (Phase 4); remind user of Store approval requirement and Ubuntu Core incompatibility |
 | `.snap` file missing after snap-packager runs | Stop; show the last build output |

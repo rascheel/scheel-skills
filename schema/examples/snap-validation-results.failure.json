@@ -2,9 +2,14 @@
   "schema_version": "1.1",
   "snap_name": "hello-cli",
   "confinement": "strict",
-  "clean": true,
+  "clean": false,
   "denials": [],
-  "diagnostics": [],
+  "diagnostics": [
+    {
+      "code": "missing-snap",
+      "message": "No .snap artifact was found in the project root."
+    }
+  ],
   "oci_mode": false,
   "devmode_pass": null,
   "devmode_notes": [],

@@ -7,7 +7,7 @@ The living definition of the two JSON files the `snap-orchestrator` sub-agents e
   top-level `oci` block (present only for container input).
 - `snap-validation-results.schema.json` — written by `snap-validator`, read by
   `snap-packager` (patch mode) and `snap-orchestrator`. Schema **1.1** = schema 1.0 **plus**
-  the optional OCI fields (`oci_mode`, `devmode_pass`, `devmode_notes`, `target_arch`,
+  the optional diagnostics and OCI fields (`diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`, `target_arch`,
   `test_environment_used`, `store_review_interfaces`, `reproducibility`), all null/empty in
   the source-code case.
 
@@ -30,5 +30,5 @@ the `jsonschema` library when installed and otherwise falls back to a built-in s
 checker, so it runs in CI/pre-commit with no extra dependencies — and without needing
 `snapcraft` or LXD. Run it as a fast gate before the two full end-to-end pipeline runs.
 
-`examples/` holds one valid instance of each file in each mode (`*.oci.json`,
-`*.source.json`) — used by `--self-test` and handy as copy-paste templates.
+`examples/` holds valid source, OCI, and diagnostics-only validation instances — used by
+`--self-test` and handy as copy-paste templates.

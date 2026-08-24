@@ -139,6 +139,7 @@ def main():
             (os.path.join(ex, "snap-analysis.source.json"), analysis_schema, "analysis (source)"),
             (os.path.join(ex, "snap-validation-results.oci.json"), results_schema, "results (oci)"),
             (os.path.join(ex, "snap-validation-results.source.json"), results_schema, "results (source)"),
+            (os.path.join(ex, "snap-validation-results.failure.json"), results_schema, "results (failure)"),
         ]
     if args.analysis:
         checks.append((args.analysis, analysis_schema, f"analysis ({args.analysis})"))

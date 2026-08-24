@@ -22,6 +22,17 @@
         }
       }
     },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
 
     "oci_mode": { "type": "boolean" },
     "devmode_pass": { "type": ["boolean", "null"] },

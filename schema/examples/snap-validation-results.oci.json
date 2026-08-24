@@ -4,6 +4,7 @@
   "confinement": "strict",
   "clean": true,
   "denials": [],
+  "diagnostics": [],
   "oci_mode": true,
   "devmode_pass": true,
   "devmode_notes": [],

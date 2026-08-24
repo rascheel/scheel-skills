@@ -242,6 +242,7 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
       "raw_denial": "<full AppArmor/SecComp log line>"
     }
   ],
+  "diagnostics": [],
 
   "oci_mode": false,
   "devmode_pass": null,
@@ -257,6 +258,9 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
 - Set `"interface_suggestion"` to the plug name from snappy-debug, or look up the denial
   in `references/denial-to-interface.md` if snappy-debug gives no suggestion.
 - Write one denial object per unique `(app, interface_suggestion)` pair — deduplicate.
+- Use `diagnostics[]` for validation failures that are not confinement denials, such as
+  a missing `.snap` artifact. Each entry has a machine-readable `code` and a human-readable
+  `message`; keep `denials[]` exclusively for valid denial objects.
 - **OCI fields:** set `oci_mode: true` in OCI mode. `devmode_pass` is `true`/`false` from
   Step 2.5 (or `null` in the base case); `target_arch` from `oci.target_arch`;
   `test_environment_used` from Step 2.0; `store_review_interfaces[]` from Step 3.4.
@@ -339,7 +343,7 @@ lxc delete --force snap-test-env
 
 | Situation | Action |
 |---|---|
-| No `.snap` file found | Write `snap-validation-results.json` with `"clean": false` and a note in `denials`; stop |
+| No `.snap` file found | Write `snap-validation-results.json` with `"clean": false`, `denials: []`, and a `missing-snap` diagnostic; stop |
 | LXD not installed or unavailable | Stop: "lxc is not available on this system" |
 | `snap install` fails | Report exact error; do not continue |
 | Denial with no snappy-debug suggestion | Read `references/denial-to-interface.md` |

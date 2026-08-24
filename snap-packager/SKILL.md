@@ -36,8 +36,9 @@ skill) and produces:
 - `SNAP_PACKAGING.md` — build instructions, interface connection commands, and testing guide
 
 > **This skill is the *only* writer of `snap/snapcraft.yaml`** in the pipeline. Both
-> analyzers emit *facts*; the validator only *reports*. Every mutation of the manifest —
-> initial render, denial patches, layouts, overrides, hooks — happens here, via
+> analyzers emit *facts*; the validator only *reports*. Initial rendering and top-level
+> structures such as `platforms:`, `hooks:`, `slots:`, and named top-level `plugs:` are
+> written here; supported incremental app plugs, layouts, and part overrides use
 > `scripts/patch_snapcraft.py` (see Step 2.4). **Never write to a container `rootfs/`
 > directly**; a change the image needs is encoded as an `override-build:`/`override-prime:`
 > step, never applied to the source tree.
@@ -110,7 +111,7 @@ by the analyzer and recorded in `snap-analysis.json`. Do not second-guess them.
 
 Consult `references/snapcraft-core24-reference.md` for field syntax when translating the
 analysis into YAML. `snap-validation-results.json`'s extended fields (`devmode_pass`,
-`devmode_notes`, `reproducibility`) also feed Step 2b — see Step 2.3.
+`devmode_notes`, `reproducibility`, `diagnostics`) also feed Step 2b.
 
 ### Step 2a: Write Files to Disk (initial mode)
 
@@ -208,7 +209,13 @@ store-review-only interfaces the validator flags.
 ### Step 2b: Patch snapcraft.yaml (patch mode)
 
 Read `snap-validation-results.json` and branch on the *kind* of remediation. Use
-`scripts/patch_snapcraft.py` for every mutation (Step 2.4) — do not hand-edit YAML.
+`scripts/patch_snapcraft.py` for supported app plugs, layouts, and part overrides (Step
+2.4); render required top-level structures directly as part of the packager's manifest
+work.
+
+**Validation diagnostics:** If `diagnostics[]` is non-empty, do not mutate the manifest
+or rebuild. Report each diagnostic and stop so the caller can resolve the pre-flight
+failure (for example, build the missing `.snap` artifact) before validation is retried.
 
 **(a) Denial → plug** (base case, all modes). For each entry in `denials[]`:
 - Add `interface_suggestion` to `apps.<app>.plugs` (idempotent — never duplicate):
@@ -216,7 +223,7 @@ Read `snap-validation-results.json` and branch on the *kind* of remediation. Use
 
 **(b) Denial → layout** (when the denial is a hardcoded path, not a capability). Add a
 `layout:` entry binding the path into `$SNAP`/`$SNAP_COMMON`, validated against
-`references/…` layout constraints: `patch_snapcraft.py --layout /hardcoded/path
+`patch_snapcraft.py`'s built-in layout constraints: `patch_snapcraft.py --layout /hardcoded/path
 '$SNAP/hardcoded/path'`. (Representable in the schema already; now an explicit Step-2b
 action.)
 
@@ -236,9 +243,11 @@ After patching, proceed directly to **Step 3** to rebuild.
 ### Step 2.4: `patch_snapcraft.py` — the single manifest mutator
 
 `scripts/patch_snapcraft.py` is the packager's **only** tool for mutating
-`snap/snapcraft.yaml`, in both Step 2a and Step 2b. It is idempotent (skips
-plugs/layouts/override-commands already present), `--dry-run`-capable, and writes a
-`snapcraft.yaml.bak` before saving. Always dry-run first, then apply:
+supported incremental `apps`, `layout`, and `parts` entries in Step 2b. It is idempotent
+(skips plugs/layouts/override-commands already present), `--dry-run`-capable, and writes
+a `snapcraft.yaml.bak` before saving. It does not render initial manifests or named
+top-level structures such as `platforms`, `hooks`, `slots`, and `plugs`. Always dry-run
+first, then apply:
 
 ```bash
 # Plugs + layouts (dry run, then drop --dry-run to apply)
@@ -304,7 +313,9 @@ After the build succeeds, summarize in the chat:
   the legacy `./snap-analysis.json`) — run `snap-analyzer` (source) or `snap-oci-analyzer`
   (container) first if it is absent
 - **This skill is the sole writer of `snap/snapcraft.yaml`.** Analyzers emit facts; the
-  validator only reports. Use `scripts/patch_snapcraft.py` for every mutation.
+  validator only reports. Use `scripts/patch_snapcraft.py` for supported incremental
+  app plugs, layouts, and part overrides; render initial and named top-level structures
+  directly.
 - **Never write to a container `rootfs/`.** Encode every image change as an
   `override-build:`/`override-prime:` step so the recipe is self-contained and reproducible.
 - **OCI mode** (analysis has an `oci` key): start from the `docker-to-snap` scaffold, add a
