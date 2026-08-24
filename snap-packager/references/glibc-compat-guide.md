@@ -161,8 +161,8 @@ localedef --list-archive rootfs/usr/lib/locale/locale-archive | grep -F "<the LA
 If the container sets a specific `LANG`/`LC_*` and the OCI rootfs has its own
 `locale-archive` containing that key, this fix is needed.
 
-**Fix — add a `layout:` bind mount** (same pattern as `/var/lib/postgresql`
-elsewhere in this guide's example projects):
+**Fix — add a `layout:` bind mount** (same `layout:` bind-mount pattern used
+elsewhere in this guide for redirecting writable/read-only paths):
 ```yaml
 layout:
   /usr/lib/locale:

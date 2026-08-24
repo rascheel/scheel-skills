@@ -43,7 +43,7 @@ means the layout entry **cannot be used** and an alternative approach is require
 > targets (rule 3: direct child of `/`). Patch the entrypoint script to reference
 > `$SNAP_COMMON/<directory>` instead, and create the directory in the install hook.
 
-> ⚠️ **`/var/run/` is always forbidden:** Even though `/var/run/postgresql` (or
+> ⚠️ **`/var/run/` is always forbidden:** Even though `/var/run/myapp` (or
 > similar) may appear valid at first glance (depth 3, not literally `/run`), it is
 > explicitly in the denylist via `/var/run`. Patch the application config or
 > entrypoint to use `$SNAP_DATA/run` or `$SNAP_COMMON/run` instead.

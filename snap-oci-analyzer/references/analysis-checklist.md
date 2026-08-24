@@ -64,7 +64,7 @@ runtime:
 # Scan the entrypoint and any scripts it sources for hardcoded absolute exports
 entrypoint=$(jq -r '.process.args[0]' config.json | sed 's|^\./||')
 grep -nE '^export [A-Z_]+=/[a-z]' rootfs/$entrypoint 2>/dev/null
-# Also check scripts sourced by the entrypoint (e.g. opensearch-env, docker-entrypoint-initdb.d)
+# Also check scripts sourced by the entrypoint (e.g. an env-setup script, or an initdb.d-style directory)
 find rootfs -name "*.sh" -exec grep -lE '^export [A-Z_]+=/[a-z]' {} \;
 ```
 

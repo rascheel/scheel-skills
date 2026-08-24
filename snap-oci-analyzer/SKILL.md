@@ -384,7 +384,7 @@ the packager.)
 > **Only if two or more snaps must share a writable directory** (e.g. a cert manager
 > writing certs a web server reads). Skip for single-snap deployments.
 
-Read `references/*` content-sharing guidance. From Docker Compose volumes (or equivalent)
+Read `references/content-interface-discovery.md`. From Docker Compose volumes (or equivalent)
 determine which snap **owns/writes** (provider/slot) and which **read/write**
 (consumer/plug) each shared directory, and the classic path each app expects. Record one
 fact per role:
@@ -519,6 +519,7 @@ skill's responsibility.
 | `references/analysis-checklist.md` | Fallback binary/rootfs analysis checklist (Phase 3) |
 | `references/layout-constraints.md` | Validate layout targets (Phases 2–4) |
 | `references/override-steps-guide.md` | Inventory rootfs mutations for `oci.overrides_needed[]` (Phase 4a) |
+| `references/content-interface-discovery.md` | Identify provider/consumer facts for `oci.content_interfaces[]` (Phase 4b); packager renders them using its content-interface guide |
 | `scripts/ensure_dependencies.py` | Checks/installs local tool + Python dependencies |
 | `scripts/download_image.py` | Downloads Docker Hub URLs / image references as docker-archive tarballs |
 | Skill: `analyze-binary-for-snapping` | Primary analysis path for plugs/layouts/unmappable paths (Steps 1–6 only) |
