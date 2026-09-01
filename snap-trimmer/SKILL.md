@@ -14,7 +14,7 @@ license: "Apache-2.0"
 metadata:
   author: "Canonical"
   version: "1.1.0"
-  summary: "Shrinks snaps by editing snapcraft.yaml — analyzes a prebuilt .snap, plans safe removals, rebuilds, and verifies via soname-regression check and an LXD smoke test."
+  summary: "Shrinks snaps by editing snapcraft.yaml — analyzes a prebuilt .snap, plans safe removals, rebuilds, and verifies via soname checks and smoke tests."
   tags:
     - snap
     - snapcraft

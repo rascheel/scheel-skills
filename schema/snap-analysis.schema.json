@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://canonical.com/snap-orchestrator/snap-analysis.schema.json",
+  "title": "snap-analysis.json",
+  "description": "Hand-off contract written by snap-analyzer (source) or snap-oci-analyzer (OCI) and consumed by snap-packager. Schema 1.1 is additive over 1.0: the only new element is the optional top-level 'oci' block. Schema 1.2 is additive over 1.1: adds the optional top-level 'target_arch' field for cross-architecture source builds (OCI analyses keep using 'oci.target_arch' instead).",
+  "type": "object",
+  "required": ["schema_version", "project", "snap", "build", "apps", "hooks", "layouts", "interfaces", "notes"],
+  "properties": {
+    "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
+    "project": {
+      "type": "object",
+      "required": ["name", "version", "summary", "description", "grade"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "summary": { "type": "string" },
+        "description": { "type": "string" },
+        "license": { "type": ["string", "null"] },
+        "grade": { "enum": ["stable", "devel"] }
+      }
+    },
+    "snap": {
+      "type": "object",
+      "required": ["base", "confinement"],
+      "properties": {
+        "base": { "type": "string" },
+        "confinement": { "enum": ["strict", "classic"] },
+        "classic_reason": { "type": ["string", "null"] }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": ["plugin"],
+      "properties": {
+        "plugin": { "type": "string" },
+        "plugin_config": { "type": "object" },
+        "build_packages": { "type": "array", "items": { "type": "string" } },
+        "stage_packages": { "type": "array", "items": { "type": "string" } },
+        "override_build_extra": { "type": ["string", "null"] }
+      }
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "command"],
+        "properties": {
+          "name": { "type": "string" },
+          "command": { "type": "string" },
+          "daemon": { "type": ["string", "null"] },
+          "plugs": { "type": "array", "items": { "type": "string" } },
+          "environment": { "type": "object" }
+        }
+      }
+    },
+    "hooks": { "type": "array", "items": { "type": "string" } },
+    "layouts": { "type": "object" },
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "apps", "auto_connected"],
+        "properties": {
+          "name": { "type": "string" },
+          "apps": { "type": "array", "items": { "type": "string" } },
+          "auto_connected": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "target_arch": {
+      "description": "Present only for schema 1.2 general (non-OCI) analyses that target a non-host architecture. Null/absent means build for the host architecture. OCI analyses use 'oci.target_arch' instead, never this field.",
+      "enum": ["amd64", "arm64", "armhf", "i386", "ppc64el", "s390x", "riscv64", null]
+    },
+
+    "oci": {
+      "type": "object",
+      "description": "Present only for OCI/container input (schema 1.1). Absent for source-code analyses.",
+      "required": ["rootfs_path", "target_arch", "reproducibility_baseline"],
+      "properties": {
+        "image_ref": { "type": ["string", "null"] },
+        "digest": { "type": ["string", "null"] },
+        "config_json_path": { "type": ["string", "null"] },
+        "rootfs_path": { "type": "string" },
+        "docker_to_snap_output_dir": { "type": ["string", "null"] },
+        "docker_to_snap_snapcraft_path": { "type": ["string", "null"] },
+        "target_arch": { "enum": ["amd64", "arm64", "armhf", "i386", "ppc64el", "s390x", "riscv64"] },
+        "entrypoint": { "type": "array", "items": { "type": "string" } },
+        "working_dir": { "type": ["string", "null"] },
+        "exposed_ports": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "object" },
+        "volumes": { "type": "array", "items": { "type": "string" } },
+        "user": {
+          "type": "object",
+          "properties": {
+            "uid": { "type": "integer" },
+            "gid": { "type": "integer" },
+            "username": { "type": ["string", "null"] },
+            "is_root": { "type": "boolean" }
+          }
+        },
+        "merged_usr": { "type": "boolean" },
+        "glibc_compat": {
+          "type": "object",
+          "properties": {
+            "oci_glibc_version": { "type": ["string", "null"] },
+            "base_snap_glibc_version": { "type": ["string", "null"] },
+            "compatible": { "type": "boolean" },
+            "mitigation": { "enum": ["rpath_embed", "none"] }
+          }
+        },
+        "system_usernames": {
+          "type": "object",
+          "properties": {
+            "needed": { "type": "boolean" },
+            "method": { "enum": ["env_var", "cli_flag", "setpriv_wrapper", "getpwnam_hardcoded", null] },
+            "details": { "type": "object" }
+          }
+        },
+        "overrides_needed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["part", "phase", "kind"],
+            "properties": {
+              "part": { "type": "string" },
+              "phase": { "enum": ["build", "prime"] },
+              "kind": { "enum": ["patch_interpreter", "symlink_fix", "chmod", "config_edit", "file_inject", "custom"] },
+              "target_path": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "content_interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "slot_or_plug_name", "content_label", "path"],
+            "properties": {
+              "role": { "enum": ["provider", "consumer"] },
+              "slot_or_plug_name": { "type": "string" },
+              "content_label": { "type": "string" },
+              "path": { "type": "string" },
+              "snap_name_hint": { "type": "string" }
+            }
+          }
+        },
+        "config_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "source", "type"],
+            "properties": {
+              "key": { "type": "string" },
+              "source": { "enum": ["env_var", "config_file", "cli_flag"] },
+              "source_name": { "type": "string" },
+              "type": { "enum": ["port", "enum", "integer", "path", "string"] },
+              "allowed_values": { "type": "array" },
+              "default": {},
+              "config_file_format": { "enum": ["ini", "yaml", "json", "env", null] },
+              "config_file_path": { "type": ["string", "null"] },
+              "wiring": { "enum": ["cli_flag", "env_var", "layout"] }
+            }
+          }
+        },
+        "reproducibility_baseline": {
+          "type": "object",
+          "required": ["tarball_path", "extraction_command_recorded"],
+          "properties": {
+            "tarball_path": { "type": ["string", "null"] },
+            "extraction_command_recorded": { "type": ["string", "null"] }
+          }
+        }
+      }
+    }
+  }
+}

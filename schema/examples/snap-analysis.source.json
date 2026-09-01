@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.2",
+  "target_arch": null,
+  "project": {
+    "name": "hello-cli",
+    "version": "1.0.0",
+    "summary": "A tiny example CLI",
+    "description": "Source-code case: no oci block.",
+    "license": "MIT",
+    "grade": "stable"
+  },
+  "snap": { "base": "core24", "confinement": "strict", "classic_reason": null },
+  "build": {
+    "plugin": "go",
+    "plugin_config": {},
+    "build_packages": [],
+    "stage_packages": [],
+    "override_build_extra": null
+  },
+  "apps": [
+    { "name": "hello-cli", "command": "bin/hello", "daemon": null, "plugs": ["network"], "environment": {} }
+  ],
+  "hooks": [],
+  "layouts": {},
+  "interfaces": [
+    { "name": "network", "apps": ["hello-cli"], "auto_connected": true, "reason": "Outbound HTTP." }
+  ],
+  "notes": []
+}
