@@ -364,10 +364,31 @@ tiny shebang script pointing at the coreutils binary:
 #!/usr/bin/coreutils --coreutils-prog-shebang=cp
 ```
 
-A `patch_coreutils_shebang.sh` `override-build` step rewrites those shebangs
-from `/usr/bin/coreutils` to `/snap/<name>/current/usr/bin/coreutils` so the
-OCI image's own coreutils binary (interpreter-patched and RPATH-embedded) is
-used at runtime. After `oci-container` is staged, the rewritten applets land in
+**Detect-and-skip: `docker-to-snap` ships and wires the fix itself.** The
+scaffold carries `build_scripts/patch_coreutils_shebang.sh` and invokes it from
+the `oci-container` part's `override-build` (after `embed_rpath.sh`, before
+`create_wrapper.sh`). The script rewrites those shebangs from
+`/usr/bin/coreutils` to `/snap/<name>/current/usr/bin/coreutils` so the OCI
+image's own coreutils binary (interpreter-patched and RPATH-embedded) is used
+at runtime. Before rendering any step yourself, check whether the scaffold
+already wires the script:
+
+```bash
+grep -q 'build_scripts/patch_coreutils_shebang.sh' snap/snapcraft.yaml \
+  && echo 'wired by docker-to-snap — nothing to do' \
+  || echo 'not wired — wire the tool-shipped script (older scaffold)'
+```
+
+- **Wired (current `docker-to-snap` scaffold):** do nothing — the scaffold
+  self-heals.
+- **Not wired (older scaffold):** add
+  `"$CRAFT_PROJECT_DIR"/build_scripts/patch_coreutils_shebang.sh` to the
+  `oci-container` part's `override-build`, after `embed_rpath.sh` and before
+  `create_wrapper.sh`. The script is tool-shipped — invoke it in place; never
+  copy it into `patch_scripts/`. If `build_scripts/` lacks the script too,
+  re-run `docker-to-snap` to regenerate the scaffold.
+
+After `oci-container` is staged, the rewritten applets land in
 `$CRAFT_STAGE/usr/bin`. Snapcraft puts `$CRAFT_STAGE` on the build `PATH` for
 subsequent parts. When a later part's `override-build` calls `craftctl default`,
 the dump plugin resolves `cp --archive` via PATH and picks up the broken staged
