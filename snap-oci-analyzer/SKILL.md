@@ -183,17 +183,20 @@ Record as facts (for the `oci` block): `config.json` path (`oci.config_json_path
 (`oci.docker_to_snap_snapcraft_path`) — the packager *starts from* that scaffold rather
 than a blank template. Also record app name(s) under `apps:` in the scaffold.
 
-**Verify `build_scripts/` was populated** by the generator (the packager wires these into
-`override-build`; this skill only confirms they exist):
+**Verify `build_scripts/` was populated** by the generator (the tool also wires them into
+the scaffold's `override-build`; this skill only confirms they exist):
 
 ```bash
 ls -1 build_scripts/*.sh 2>/dev/null || echo "WARNING: build_scripts/ not populated"
 ```
 
-Expected: `create_wrapper.sh`, `embed_rpath.sh`, `patch_interpreter.sh`,
-`replace_absolute_symlinks.sh`. If missing, verify the generator's build-scripts source
-directory and re-run `docker-to-snap`. These scripts are **generated at extraction time,
-not shipped by any skill** — never copy them; the packager only invokes them.
+Expected: `create_wrapper.sh`, `embed_rpath.sh`, `patch_coreutils_shebang.sh`,
+`patch_interpreter.sh`, `replace_absolute_symlinks.sh`. `patch_coreutils_shebang.sh` is
+shipped and wired by the tool — it rewrites coreutils-single applet shebangs at build
+time (see `references/override-steps-guide.md` §7b for the packager's detect-and-skip
+rule). If missing, verify the generator's build-scripts source directory and re-run
+`docker-to-snap`. These scripts are **generated at extraction time, not shipped by any
+skill** — never copy them; the packager only invokes them.
 
 ---
 
