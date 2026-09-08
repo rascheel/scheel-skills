@@ -109,7 +109,8 @@ After a successful `docker-to-snap --suppress-build` run, the output folder cont
 │   │                                   resolves the entrypoint's own shebang explicitly
 │   │                                   instead of relying on the kernel's shebang parser)
 │   ├── embed_rpath.sh              ← embeds RPATH into all ET_EXEC ELF binaries
-│   ├── patch_entrypoint.sh         ← postgres-specific entrypoint patches (not called by default)
+│   ├── patch_coreutils_shebang.sh  ← rewrites coreutils-single applet shebangs to the
+│   │                                  image's own coreutils (Amazon Linux 2023 / RHEL 9+)
 │   ├── patch_interpreter.sh        ← patches ELF interpreter to snap-local path
 │   └── replace_absolute_symlinks.sh ← converts absolute symlinks to relative
 ├── config.json                 ← OCI image config (input for Phase 1+)

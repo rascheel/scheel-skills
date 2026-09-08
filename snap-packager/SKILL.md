@@ -185,7 +185,8 @@ Read the scaffold's `platforms:` and keep it; verify its entry key and `build-fo
 value equal `oci.target_arch`. Only if the stanza is absent or unparseable (a
 scaffold from an older `docker-to-snap`) generate it from `oci.target_arch`, in the
 same canonical shape. Either way the build targets exactly one architecture (a
-single container image is not multi-arch), and callers never pass `--build-for`.
+single container image is not multi-arch), and no `--build-for` flag is needed on
+`snapcraft pack`.
 
 **3. Render `system-usernames:` + privilege drop** from `oci.system_usernames` (when
 `needed`). Add the stanza (`system-usernames: {_daemon_: shared}`) and apply the wrapper

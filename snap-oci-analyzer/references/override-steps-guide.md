@@ -83,6 +83,7 @@ override-build: |
   "$CRAFT_PROJECT_DIR"/build_scripts/replace_absolute_symlinks.sh
   "$CRAFT_PROJECT_DIR"/build_scripts/patch_interpreter.sh
   "$CRAFT_PROJECT_DIR"/build_scripts/embed_rpath.sh
+  "$CRAFT_PROJECT_DIR"/build_scripts/patch_coreutils_shebang.sh
   "$CRAFT_PROJECT_DIR"/build_scripts/create_wrapper.sh
 
   # craftctl default copies $CRAFT_PART_BUILD → $CRAFT_PART_INSTALL
@@ -106,7 +107,8 @@ override-build: |
 ```
 
 The `oci-container` build scripts (`replace_absolute_symlinks.sh`,
-`patch_interpreter.sh`, `embed_rpath.sh`, `create_wrapper.sh`) operate on
+`patch_interpreter.sh`, `embed_rpath.sh`, `patch_coreutils_shebang.sh`,
+`create_wrapper.sh`) operate on
 `$CRAFT_PART_BUILD` (the unpacked source tree), which *is* populated before
 `craftctl default`. This is why they run before `craftctl default` in the
 generated template. Any **additional** config-file patches you add should be

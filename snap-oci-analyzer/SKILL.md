@@ -326,7 +326,8 @@ name) the packager needs. Do **not** edit YAML or wrapper scripts here.
 - **glibc:** compare OCI vs base-snap glibc versions and record `oci.glibc_compat`
   (`oci_glibc_version`, `base_snap_glibc_version`, `compatible`). If they differ, set
   `mitigation = "rpath_embed"` (never `LD_LIBRARY_PATH`); otherwise `mitigation = "none"`.
-  The packager wires the generated `build_scripts/embed_rpath.sh` into `override-build`.
+  The tool already wires `build_scripts/embed_rpath.sh` into the scaffold's
+  `override-build`; the packager does not add it.
 
 ---
 
