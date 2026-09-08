@@ -1,8 +1,11 @@
 # snapcraft.yaml template for core24 / snapcraft 8.x
 # This is a structural reference — replace all placeholder values with real ones.
+# OCI mode: do NOT start from this template — start from the docker-to-snap
+# scaffold (oci.docker_to_snap_snapcraft_path) and preserve its `base:`
+# (currently core26). See SKILL.md, "Step 2a (OCI variant)".
 
 name: my-app                      # lowercase, hyphens only, max 40 chars
-base: core24                      # always core24
+base: core24                      # always core24 for source-built snaps (OCI mode keeps the scaffold's base)
 build-base: core24                # always core24
 version: '0.1.0'                  # semver, or 'git' to derive from git tag
 summary: One-line summary         # max 79 chars

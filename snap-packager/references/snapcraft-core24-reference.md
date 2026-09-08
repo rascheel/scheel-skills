@@ -1,5 +1,14 @@
 # Snapcraft core24 Reference (Snapcraft 8.x)
 
+> **core26 note (OCI mode):** the `docker-to-snap` scaffold declares
+> `base: core26`, and OCI mode preserves it — do not rewrite it to core24. All
+> field syntax in this reference (`apps:`, `parts:`, `layout:`, extensions,
+> `stage`/`prime`, daemon types) applies unchanged on a core26 base. The
+> genuinely version-specific content is the `base:` value in the examples and
+> the "Common stage-packages" table: package names track the base's Ubuntu
+> release (24.04/Noble for core24, 26.04 for core26), so re-verify names such
+> as `libicu74` against the core26 base before relying on them for an OCI snap.
+
 ## Top-Level Fields
 
 ```yaml

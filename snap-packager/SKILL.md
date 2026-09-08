@@ -77,7 +77,7 @@ do not re-inspect the source code. The fields are:
 |---|---|
 | `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), or `"1.2"` (may carry a top-level `target_arch`) |
 | `project.*` | Snap name, version, summary, description, license, grade |
-| `snap.base` | Always `core24` |
+| `snap.base` | `core24` for source-built snaps; ignored in OCI mode — the scaffold's own `base:` (currently `core26`) is preserved |
 | `snap.confinement` | `strict` or `classic` |
 | `build.plugin` | Snapcraft plugin to use (`dump` for OCI, with a local `rootfs/` source) |
 | `build.plugin_config` | Plugin-specific keys to merge into the `parts` entry |
@@ -166,7 +166,9 @@ image change as an override step; never edit the source tree.
 `oci.docker_to_snap_snapcraft_path` and refine that file in place — it already encodes real
 generated machinery (the wrapper script, `build_scripts/` wiring, a `/etc/hosts` install
 hook) that would be costly to regenerate from facts. Do not start from
-`assets/snapcraft.yaml.template` in OCI mode.
+`assets/snapcraft.yaml.template` in OCI mode. Preserve the scaffold's `base:` (currently
+`core26`) as-is — do **not** force `core24`; the analysis's `snap.base` field does not
+apply to OCI mode.
 
 **2. Adopt the scaffold's `platforms:` stanza — do not regenerate it.**
 `docker-to-snap` already bakes the target architecture into the recipe from normalized
@@ -361,7 +363,7 @@ After the build succeeds, summarize in the chat:
 - **General path cross-compilation** (top-level `target_arch` non-null): add the same
   `platforms:` stanza, keyed on `target_arch` instead of `oci.target_arch` — otherwise
   identical rendering. Omit `platforms:` when `target_arch` is `null`.
-- Always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`)
+- General path: always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`). OCI mode: preserve the scaffold's `base:` (currently `core26`) — never force core24
 - Never use `devmode` in generated files — it is a testing-only aid
 - If the app has multiple binaries or services, model each as a separate entry under `apps`
 - For daemons: use `daemon: simple` (stays in foreground) or `daemon: forking` (calls fork/daemonizes)
