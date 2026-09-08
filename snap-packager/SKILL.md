@@ -131,7 +131,7 @@ Translate every field from `snap-analysis.json` — do not leave placeholder com
   ```yaml
   platforms:
     <target_arch>:
-      build-on: [<target_arch>]
+      build-on: [amd64, arm64]
       build-for: [<target_arch>]
   ```
   Omit `platforms:` entirely when `target_arch` is `null` (the common host-arch case) —
@@ -168,16 +168,22 @@ generated machinery (the wrapper script, `build_scripts/` wiring, a `/etc/hosts`
 hook) that would be costly to regenerate from facts. Do not start from
 `assets/snapcraft.yaml.template` in OCI mode.
 
-**2. Bake the target architecture into the recipe.** Write a `platforms:` stanza from
-`oci.target_arch` so the build targets exactly one architecture (a single container image
-is not multi-arch), rather than relying on callers to pass `--build-for`:
+**2. Adopt the scaffold's `platforms:` stanza — do not regenerate it.**
+`docker-to-snap` already bakes the target architecture into the recipe from normalized
+OCI metadata, as a single-entry stanza in this canonical contract shape:
 
 ```yaml
 platforms:
   <target_arch>:
-    build-on: [<target_arch>]
+    build-on: [amd64, arm64]
     build-for: [<target_arch>]
 ```
+
+Read the scaffold's `platforms:` and keep it; verify its entry key and `build-for`
+value equal `oci.target_arch`. Only if the stanza is absent or unparseable (a
+scaffold from an older `docker-to-snap`) generate it from `oci.target_arch`, in the
+same canonical shape. Either way the build targets exactly one architecture (a
+single container image is not multi-arch), and callers never pass `--build-for`.
 
 **3. Render `system-usernames:` + privilege drop** from `oci.system_usernames` (when
 `needed`). Add the stanza (`system-usernames: {_daemon_: shared}`) and apply the wrapper
@@ -347,10 +353,11 @@ After the build succeeds, summarize in the chat:
   directly.
 - **Never write to a container `rootfs/`.** Encode every image change as an
   `override-build:`/`override-prime:` step so the recipe is self-contained and reproducible.
-- **OCI mode** (analysis has an `oci` key): start from the `docker-to-snap` scaffold, add a
-  `platforms:` stanza from `oci.target_arch`, and render system-usernames / overrides /
-  content interfaces / config hooks from the `oci.*` facts. Never use `LD_LIBRARY_PATH` for
-  a glibc mismatch — use RPATH embedding via the generated `build_scripts/embed_rpath.sh`.
+- **OCI mode** (analysis has an `oci` key): start from the `docker-to-snap` scaffold, adopt
+  its `platforms:` stanza (generate one from `oci.target_arch` only if the scaffold lacks
+  it), and render system-usernames / overrides / content interfaces / config hooks from the
+  `oci.*` facts. Never use `LD_LIBRARY_PATH` for a glibc mismatch — use RPATH embedding via
+  the generated `build_scripts/embed_rpath.sh`.
 - **General path cross-compilation** (top-level `target_arch` non-null): add the same
   `platforms:` stanza, keyed on `target_arch` instead of `oci.target_arch` — otherwise
   identical rendering. Omit `platforms:` when `target_arch` is `null`.
