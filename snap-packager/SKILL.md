@@ -77,7 +77,7 @@ do not re-inspect the source code. The fields are:
 |---|---|
 | `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), or `"1.2"` (may carry a top-level `target_arch`) |
 | `project.*` | Snap name, version, summary, description, license, grade |
-| `snap.base` | `core24` for source-built snaps; ignored in OCI mode — the scaffold's own `base:` (currently `core26`) is preserved |
+| `snap.base` | `core24` for source-built snaps; in OCI mode it mirrors the scaffold's own `base:` (currently `core26`), which is preserved — if the two ever differ, the scaffold wins |
 | `snap.confinement` | `strict` or `classic` |
 | `build.plugin` | Snapcraft plugin to use (`dump` for OCI, with a local `rootfs/` source) |
 | `build.plugin_config` | Plugin-specific keys to merge into the `parts` entry |
@@ -167,8 +167,8 @@ image change as an override step; never edit the source tree.
 generated machinery (the wrapper script, `build_scripts/` wiring, a `/etc/hosts` install
 hook) that would be costly to regenerate from facts. Do not start from
 `assets/snapcraft.yaml.template` in OCI mode. Preserve the scaffold's `base:` (currently
-`core26`) as-is — do **not** force `core24`; the analysis's `snap.base` field does not
-apply to OCI mode.
+`core26`) as-is — do **not** force `core24`. The analysis's `snap.base` records the same
+value; if they ever differ (e.g. a re-run `docker-to-snap`), keep the scaffold's.
 
 **2. Adopt the scaffold's `platforms:` stanza — do not regenerate it.**
 `docker-to-snap` already bakes the target architecture into the recipe from normalized

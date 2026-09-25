@@ -8,7 +8,7 @@
     "license": null,
     "grade": "stable"
   },
-  "snap": { "base": "core24", "confinement": "strict", "classic_reason": null },
+  "snap": { "base": "core26", "confinement": "strict", "classic_reason": null },
   "build": {
     "plugin": "dump",
     "plugin_config": { "source": "rootfs", "source-type": "local" },

@@ -42,7 +42,7 @@ When the effective target architecture is set, the manifest SHALL contain a sing
 - **THEN** `platforms:` has a single `riscv64` entry with `build-for: [riscv64]`
 
 ### Requirement: OCI rendering
-When the analysis has an `oci` block, the skill SHALL refine the `docker-to-snap` scaffold manifest in place rather than starting from the blank template. It SHALL keep the scaffold's `base:` and `platforms:` stanza, generating `platforms:` from `oci.target_arch` only if the scaffold lacks it. It SHALL render `system-usernames`, override steps, content-interface slots and plugs, and configure/install hook bodies from the `oci.*` facts. It MUST append to the generated install hook and merge the `hooks:` stanza instead of replacing them.
+When the analysis has an `oci` block, the skill SHALL refine the `docker-to-snap` scaffold manifest in place rather than starting from the blank template. It SHALL keep the scaffold's `base:` (which the analysis's `snap.base` mirrors; the scaffold wins if they differ) and `platforms:` stanza, generating `platforms:` from `oci.target_arch` only if the scaffold lacks it. It SHALL render `system-usernames`, override steps, content-interface slots and plugs, and configure/install hook bodies from the `oci.*` facts. It MUST append to the generated install hook and merge the `hooks:` stanza instead of replacing them.
 
 #### Scenario: Scaffold already pins the architecture
 - **WHEN** the scaffold's `platforms:` entry matches `oci.target_arch`

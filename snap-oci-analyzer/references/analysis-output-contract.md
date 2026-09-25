@@ -7,7 +7,7 @@ machine-validated contract is `../../schema/snap-analysis.schema.json`.
 {
   "schema_version": "1.1",
   "project": { "name": "...", "version": "...", "summary": "...", "description": "...", "license": null, "grade": "stable | devel" },
-  "snap": { "base": "core24", "confinement": "strict", "classic_reason": null },
+  "snap": { "base": "<scaffold base:, currently core26>", "confinement": "strict", "classic_reason": null },
   "build": { "plugin": "dump", "plugin_config": { "source": "<rootfs_path>", "source-type": "local" }, "build_packages": [], "stage_packages": [], "override_build_extra": null },
   "apps": [ { "name": "...", "command": "<wrapper path>", "daemon": null, "plugs": ["..."], "environment": {} } ],
   "hooks": [],
