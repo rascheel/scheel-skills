@@ -17,21 +17,54 @@ A set of AI agent skills that automate the full lifecycle of packaging applicati
 
 ### Pipeline Architecture
 
-The orchestrator coordinates three skills in a build loop:
+`snap-orchestrator` is the entry point: it detects the input type, runs one of the two
+analyzers, then drives the packager and validator in a build loop. Everything inside the
+double-lined frame runs under its control:
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│ snap-analyzer│────▶│ snap-packager│────▶│snap-validator│
-└──────────────┘     └──────────────┘     └──────────────┘
-                             ▲                     │
-                             │   patch & rebuild   │
-                             └─────────────────────┘
-
-         snap-orchestrator manages this flow
+      Source code project             OCI / container input
+    (go.mod, Cargo.toml, …)        (image ref, Docker Hub URL,
+                                      docker save .tar, or
+                                     config.json + rootfs/)
+               │                                │
+╔══════════════╪══════ snap-orchestrator ═══════╪═══════════════════╗
+║              ▼                                ▼                   ║
+║    ┌───────────────────┐            ┌───────────────────┐         ║
+║    │   snap-analyzer   │            │ snap-oci-analyzer │         ║
+║    └─────────┬─────────┘            └─────────┬─────────┘         ║
+║              │                                │                   ║
+║              └──────────────┬─────────────────┘                   ║
+║                             │  runs exactly one analyzer          ║
+║                             ▼                                     ║
+║               /tmp/snap-analysis-<dir>.json                       ║
+║          (same contract; `oci` block only for OCI input)          ║
+║                             │                                     ║
+║                             ▼                                     ║
+║                     ┌──────────────┐     ┌──────────────┐         ║
+║                     │ snap-packager│────▶│snap-validator│         ║
+║                     └──────────────┘     └──────────────┘         ║
+║                             ▲                   │                 ║
+║                             │  patch & rebuild  │                 ║
+║                             └───────────────────┘                 ║
+║        denials → plugs/layouts · devmode crash → build fix        ║
+║         OCI only: reproducibility diffs → override steps          ║
+║                                                                   ║
+║             loops until clean, or until a cap is hit:             ║
+║   5 denial patches · 3 devmode fixes · 3 reproducibility fixes    ║
+╚═════════════════════════════╤═════════════════════════════════════╝
+                              │
+                              ▼
+                       validated .snap
+                              │  standalone skills, run separately
+                              ▼
+                      ┌──────────────┐     ┌──────────────┐
+                      │ snap-trimmer │────▶│snap-publisher│
+                      └──────────────┘     └──────────────┘
+                         (optional)         (Snap Store)
 ```
 
 The skills communicate through files on disk:
-- `/tmp/snap-analysis-<dir>.json` — analyzer → packager (transient hand-off, kept out of the repo)
+- `/tmp/snap-analysis-<dir>.json` — `snap-analyzer` or `snap-oci-analyzer` → packager (transient hand-off, kept out of the repo)
 - `snap/snapcraft.yaml` — packager → validator
 - `snap-validation-results.json` — validator → packager (patch mode)
 
