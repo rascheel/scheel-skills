@@ -61,6 +61,11 @@ An analysis SHALL carry at most one target architecture: `oci.target_arch` for c
 - **WHEN** an analysis has an `oci` block
 - **THEN** the effective target architecture is `oci.target_arch` and top-level `target_arch` is absent or null
 
+#### Scenario: Both architecture fields set
+- **WHEN** an analysis has an `oci` block and a non-null top-level `target_arch`
+- **THEN** it fails validation against `schema/snap-analysis.schema.json`
+- **AND** `schema/validate_contracts.py` rejects it with exit code `1`, with or without the `jsonschema` library
+
 ### Requirement: LXD-free contract gate
 The repository SHALL provide `schema/validate_contracts.py`, which validates analysis and results files against the schemas without requiring `snapcraft` or LXD. It MUST exit `0` when all inputs are valid, `1` on a validation error, and `2` on a usage or file error. With `--self-test` it MUST validate the bundled examples in `schema/examples/`.
 

@@ -6,8 +6,9 @@ The living definition of the two JSON files the `snap-orchestrator` sub-agents e
   (OCI), read by `snap-packager`. Schema **1.1** = schema 1.0 **plus** the optional
   top-level `oci` block (present only for container input). Schema **1.2** = schema 1.1
   **plus** the optional top-level `target_arch` field, for cross-architecture *source*
-  builds — mutually exclusive with `oci.target_arch`, which remains the authoritative
-  source for OCI-derived snaps (a container image is single-arch by construction).
+  builds — mutually exclusive with `oci.target_arch` (the schema rejects an analysis that
+  sets both), which remains the authoritative source for OCI-derived snaps (a container
+  image is single-arch by construction).
 - `snap-validation-results.schema.json` — written by `snap-validator`, read by
   `snap-packager` (patch mode) and `snap-orchestrator`. Schema **1.1** = schema 1.0 **plus**
   the optional fields `diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`,

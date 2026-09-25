@@ -44,7 +44,7 @@ def _validate_with_jsonschema(instance, schema):
 
 
 def _fallback_check(instance, schema, path="$"):
-    """Minimal draft-07 subset: required, type, enum, nested properties/items.
+    """Minimal draft-07 subset: required, type, enum, if/then, nested properties/items.
 
     Not a full validator — it catches the structural breakages this gate cares about
     (missing required keys, wrong scalar types, bad enum values) without a dependency.
@@ -82,6 +82,9 @@ def _fallback_check(instance, schema, path="$"):
         for key, subschema in props.items():
             if key in instance:
                 errors += _fallback_check(instance[key], subschema, f"{path}.{key}")
+
+    if "if" in schema and "then" in schema and not _fallback_check(instance, schema["if"], path):
+        errors += _fallback_check(instance, schema["then"], path)
 
     if isinstance(instance, list) and "items" in schema:
         for i, item in enumerate(instance):
