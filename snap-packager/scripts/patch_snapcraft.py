@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-patch_snapcraft.py — Adds OCI-derived plugs, layouts, and override steps to an
-                     existing snapcraft.yaml.
+patch_snapcraft.py — Adds plugs, layouts, and override steps to an existing
+                     snapcraft.yaml (source-built or OCI-derived).
 
 Usage:
     python3 scripts/patch_snapcraft.py \\
