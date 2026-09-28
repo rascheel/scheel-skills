@@ -77,7 +77,7 @@ do not re-inspect the source code. The fields are:
 |---|---|
 | `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), or `"1.2"` (may carry a top-level `target_arch`) |
 | `project.*` | Snap name, version, summary, description, license, grade |
-| `snap.base` | `core24` for source-built snaps; ignored in OCI mode — the scaffold's own `base:` (currently `core26`) is preserved |
+| `snap.base` | `core24` for source-built snaps; in OCI mode it mirrors the scaffold's own `base:` (currently `core26`), which is preserved — if the two ever differ, the scaffold wins |
 | `snap.confinement` | `strict` or `classic` |
 | `build.plugin` | Snapcraft plugin to use (`dump` for OCI, with a local `rootfs/` source) |
 | `build.plugin_config` | Plugin-specific keys to merge into the `parts` entry |
@@ -167,8 +167,8 @@ image change as an override step; never edit the source tree.
 generated machinery (the wrapper script, `build_scripts/` wiring, a `/etc/hosts` install
 hook) that would be costly to regenerate from facts. Do not start from
 `assets/snapcraft.yaml.template` in OCI mode. Preserve the scaffold's `base:` (currently
-`core26`) as-is — do **not** force `core24`; the analysis's `snap.base` field does not
-apply to OCI mode.
+`core26`) as-is — do **not** force `core24`. The analysis's `snap.base` records the same
+value; if they ever differ (e.g. a re-run `docker-to-snap`), keep the scaffold's.
 
 **2. Adopt the scaffold's `platforms:` stanza — do not regenerate it.**
 `docker-to-snap` already bakes the target architecture into the recipe from normalized
@@ -265,14 +265,14 @@ command via `references/override-steps-guide.md` and apply with `patch_snapcraft
 
 After patching, proceed directly to **Step 3** to rebuild.
 
-### Step 2.4: `patch_snapcraft.py` — the single manifest mutator
+### Step 2.4: `patch_snapcraft.py` — the incremental patcher
 
 `scripts/patch_snapcraft.py` is the packager's **only** tool for mutating
 supported incremental `apps`, `layout`, and `parts` entries in Step 2b. It is idempotent
 (skips plugs/layouts/override-commands already present), `--dry-run`-capable, and writes
 a `snapcraft.yaml.bak` before saving. It does not render initial manifests or named
-top-level structures such as `platforms`, `hooks`, `slots`, and `plugs`. Always dry-run
-first, then apply:
+top-level structures such as `platforms`, `hooks`, `slots`, `plugs`, and
+`system-usernames`. Always dry-run first, then apply:
 
 ```bash
 # Plugs + layouts (dry run, then drop --dry-run to apply)
@@ -290,9 +290,10 @@ python3 <skill-dir>/scripts/patch_snapcraft.py \
 
 Exit codes: `1` file not found · `2` app not found · `3` YAML parse error · `4` no
 `--plugs`/`--layout`/`--override-build`/`--override-prime` given · `5` `--part` not found ·
-`6` `--override-*` without `--part`. The `hooks:` stanza and `platforms:` stanza are not
-part targets — add those directly to the YAML (the script targets apps and parts). Reserve
-freehand edits for those two stanzas only.
+`6` `--override-*` without `--part`. Edit the YAML directly only for what the script
+cannot express: the initial render (Step 2a), the top-level structures above, and
+root-cause fixes to `command:` paths or part definitions (Step 2b (c), Step 3). App plugs,
+layouts, and override-command additions always go through the script.
 
 ### Step 3: Build and Verify
 
@@ -386,4 +387,4 @@ After the build succeeds, summarize in the chat:
 | `references/content-interface-guide.md` | Content slot/plug rendering + double-bind rule (OCI mode) |
 | `references/glibc-compat-guide.md` | glibc / merged-`/usr` mitigation rendering, ELF-crash fixes (OCI mode) |
 | `references/system-usernames-guide.md` | `system-usernames:` stanza + privilege-drop wrapper rendering (OCI mode) |
-| `scripts/patch_snapcraft.py` | The single tool for all `snapcraft.yaml` mutations (plugs, layouts, override steps) |
+| `scripts/patch_snapcraft.py` | Idempotent patcher for incremental app plugs, layouts, and part override steps; top-level structures are edited directly |
