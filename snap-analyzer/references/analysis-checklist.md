@@ -99,7 +99,7 @@ Answer these before choosing `strict` vs `classic`. Default to `strict` — only
 - [ ] Does it have a `--daemon` / `--no-daemon` / `--foreground` flag?
 - [ ] README describes it as a server or background service?
 - [ ] Does it need to start on boot? → `daemon: simple` or `daemon: forking` in apps entry
-- [ ] Does the app's default config hardcode a port below 1024 (e.g. 80, 443)? → The `install` hook must seed a corrected config to `$SNAP_COMMON` using a port ≥ 1024; never copy the upstream default verbatim if it contains a privileged port. The daemon's wrapper or command should point at `$SNAP_COMMON` so the user can edit it freely after install.
+- [ ] Does the app's default config need changes to run in a snap (for example absolute paths outside writable areas)? → The `install` hook seeds a corrected config to `$SNAP_COMMON`, and the daemon's wrapper or command points at it so the user can edit it freely after install. A port below 1024 needs changing only when the process is non-root when it binds (see the `network-bind` note in `snap-interfaces-catalog.md`); if you pick a different port anyway, for example to avoid clashing with a host service, record why in `notes[]`.
 - [ ] Does the app (or a wrapper or sourced helper) call `snapctl get`, or does the plan seed options with `snapctl set`? → Record each option in top-level `config_options[]` with its key, type (record `true`/`false` flags as `boolean`), default, and whether a running daemon must restart to pick up a change (`restart_required`). Any recorded option requires the `configure` hook; any non-null default requires the `install` hook.
 
 ---

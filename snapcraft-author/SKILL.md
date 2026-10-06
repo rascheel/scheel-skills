@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "2.1.0"
+  version: "2.1.1"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -149,7 +149,8 @@ hooks minimal — they run as root and must complete quickly.
 `config_options[]`, render the `configure` hook from it (Pattern B in
 `references/snap-hooks-reference.md`, or `assets/configure-hook-template.sh`):
 - Read each option with `snapctl get <key>` and validate it by `type`, **only when the
-  value is non-empty**: `port` → integer 1–65535, `integer` → digits, `boolean` →
+  value is non-empty**: `port` → integer 1–65535 (no `>= 1024` floor: root daemons with
+  `network-bind` can bind low ports), `integer` → digits, `boolean` →
   `true`/`false`, `enum` → one of `allowed_values`, `path`/`string` → no check. Exit
   non-zero with a message naming the key on a bad value, so `snap set` fails.
 - If any option has `restart_required: true`, restart each daemon app, but only when

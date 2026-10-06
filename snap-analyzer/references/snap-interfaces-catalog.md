@@ -21,7 +21,7 @@ Each entry lists: the interface name, what it grants, detection signals, and whe
 | `network-setup-control` | Modify netplan configuration | Netplan writers, network provisioning tools | MC |
 | `firewall-control` | nftables / iptables writes | nftables, `iptables -A`, firewall management | MC |
 
-> **`network-bind` port restriction:** Strict-confinement snaps cannot bind to ports below 1024. This is a Linux kernel restriction (`CAP_NET_BIND_SERVICE`) — snap does not permit ambient capabilities, so there is no workaround within strict confinement. When packaging a server or daemon, always configure it to listen on a port ≥ 1024 (e.g. 8080 instead of 80, 8443 instead of 443). If the upstream default config hardcodes a privileged port, ship a patched config file or override the port in a wrapper script or `install` hook.
+> **`network-bind` and ports below 1024:** Snap daemons run as root, and with `network-bind` they can bind ports below 1024 under strict confinement (verified on Ubuntu, where the grant comes through the `nameservice` AppArmor abstraction). Don't move a daemon off 80 or 443 for confinement reasons, and don't add a `>= 1024` check to port validation. The exception is a process that is non-root when it binds: a CLI app run by an ordinary user, or a daemon that drops to a `system-usernames` user before binding (for example with a `setpriv` wrapper that drops privileges before exec). That process needs a port ≥ 1024, or must bind before dropping privileges. Picking a high default port to avoid clashing with host services is a valid packaging choice; record it in `notes[]` as a choice, not a confinement requirement. On other targets, a denial with `operation="capable"` and `capname="net_bind_service"` means the bind was blocked.
 
 ---
 

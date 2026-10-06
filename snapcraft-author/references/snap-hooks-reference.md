@@ -17,18 +17,19 @@ All hooks:
 
 **When NOT to add:** The app handles its own first-run setup internally (creates its own dirs/config on startup). Most well-written apps don't need this hook.
 
-**Daemon config seeding pattern:** For server/daemon apps whose upstream default config hardcodes privileged ports or absolute paths incompatible with strict confinement, always seed a corrected config into `$SNAP_COMMON` (or `$SNAP_DATA`) from the `install` hook rather than copying the upstream default verbatim. The daemon wrapper should point at `$SNAP_COMMON` so the user can freely edit the config after install without the snap overwriting it on refresh.
+**Daemon config seeding pattern:** For server/daemon apps whose upstream default config hardcodes absolute paths incompatible with strict confinement, always seed a corrected config into `$SNAP_COMMON` (or `$SNAP_DATA`) from the `install` hook rather than copying the upstream default verbatim. The daemon wrapper should point at `$SNAP_COMMON` so the user can freely edit the config after install without the snap overwriting it on refresh.
 
 ```bash
 #!/bin/bash
 set -e
 
 # Seed corrected config on first install only — never overwrite user edits.
-# Upstream default listens on port 80 which strict confinement cannot bind;
-# rewrite to 8080 here.
+# Upstream default writes its pid file under the read-only install prefix;
+# point it at $SNAP_COMMON. Keep `listen 80`: a root daemon with network-bind
+# can bind it.
 if [ ! -f "$SNAP_COMMON/conf/nginx.conf" ]; then
     mkdir -p "$SNAP_COMMON/conf" "$SNAP_COMMON/logs" "$SNAP_COMMON/html"
-    sed 's/listen  *80;/listen 8080;/' \
+    sed "s|^#\{0,1\}pid .*|pid $SNAP_COMMON/logs/nginx.pid;|" \
         "$SNAP/usr/local/nginx/conf/nginx.conf" \
         > "$SNAP_COMMON/conf/nginx.conf"
     cp -r "$SNAP/usr/local/nginx/html/." "$SNAP_COMMON/html/"
@@ -303,7 +304,7 @@ Start from `assets/configure-hook-template.sh`. For **each** option in
    ```
 2. **Validation matched to `type`** (only when the value is non-empty — an unset key must
    never fail `snap set`):
-   - `port` → integer 1–65535
+   - `port` → integer 1–65535. Don't add a `>= 1024` floor unless the analysis `notes[]` record that the daemon binds as a non-root user
    - `integer` → positive integer (or the option's documented range)
    - `enum` → `case` over `allowed_values`
    - `path` → file/dir existence check

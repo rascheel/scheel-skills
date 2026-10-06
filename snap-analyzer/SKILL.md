@@ -12,7 +12,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.3.0"
+  version: "1.3.1"
   summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snapcraft-author, including target_arch for cross-arch builds."
   tags:
     - snap
