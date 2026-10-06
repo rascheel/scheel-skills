@@ -5,6 +5,15 @@
   "description": "Hand-off contract written by snap-analyzer (source) or snap-oci-analyzer (OCI) and consumed by snap-packager. Schema 1.1 is additive over 1.0: the only new element is the optional top-level 'oci' block. Schema 1.2 is additive over 1.1: adds the optional top-level 'target_arch' field for cross-architecture source builds (OCI analyses keep using 'oci.target_arch' instead).",
   "type": "object",
   "required": ["schema_version", "project", "snap", "build", "apps", "hooks", "layouts", "interfaces", "notes"],
+  "if": { "required": ["oci"] },
+  "then": {
+    "properties": {
+      "target_arch": {
+        "type": "null",
+        "description": "OCI analyses carry their architecture in 'oci.target_arch'; top-level 'target_arch' must be absent or null."
+      }
+    }
+  },
   "properties": {
     "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
     "project": {

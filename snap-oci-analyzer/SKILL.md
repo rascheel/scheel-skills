@@ -181,7 +181,8 @@ Record as facts (for the `oci` block): `config.json` path (`oci.config_json_path
 `rootfs/` path (`oci.rootfs_path`), the `docker-to-snap` output dir
 (`oci.docker_to_snap_output_dir`), and the scaffold snapcraft path
 (`oci.docker_to_snap_snapcraft_path`) — the packager *starts from* that scaffold rather
-than a blank template. Also record app name(s) under `apps:` in the scaffold.
+than a blank template. Also record app name(s) under `apps:` in the scaffold, and the
+scaffold's `base:` value (currently `core26`) — it becomes `snap.base` in Phase 5.
 
 **Verify `build_scripts/` was populated** by the generator (the tool also wires them into
 the scaffold's `override-build`; this skill only confirms they exist):
@@ -434,8 +435,10 @@ project root. Reuse the existing schema fields exactly as `snap-analyzer` does, 
 the new optional top-level `oci` block. Set `schema_version` to `"1.1"`.
 
 **Reused fields, OCI specifics:**
-- `snap.base = "core24"`; `snap.confinement = "strict"` (classic must never be used for
-  OCI — if the user insists, follow `snap-analyzer`'s classic caveat flow).
+- `snap.base` = the scaffold's `base:` recorded in Phase 0d (currently `"core26"`) — the
+  packager preserves the scaffold's base, so the analysis must report the same value, not
+  `core24`. `snap.confinement = "strict"` (classic must never be used for OCI — if the
+  user insists, follow `snap-analyzer`'s classic caveat flow).
 - `build.plugin = "dump"`, `build.plugin_config = {"source": "<rootfs_path>",
   "source-type": "local"}` — no new build field needed.
 - `apps[].command` → the `docker-to-snap`-generated wrapper (e.g. `bin/library_wrapper.sh`

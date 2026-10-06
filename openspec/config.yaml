@@ -1,0 +1,24 @@
+schema: spec-driven
+
+context: |
+  This repo is a set of AI agent skills (SKILL.md + references/scripts/assets per
+  directory) that package applications as snaps. The pipeline is
+  analyzer -> packager -> validator, coordinated by snap-orchestrator; snap-trimmer
+  and snap-publisher are standalone. Skills communicate only through files:
+  /tmp/snap-analysis-<dir>.json and snap-validation-results.json, whose field-level
+  shape lives in schema/*.schema.json (checked by schema/validate_contracts.py).
+  mattermost/ is unrelated to the snap pipeline and has no spec.
+
+  Division of labor: openspec/specs/ holds each skill's observable contract
+  (inputs, outputs, invariants, hand-offs). SKILL.md holds the procedure the agent
+  follows. A change to a guarantee needs a spec delta; a change to wording or
+  steps that keeps the guarantee does not.
+
+rules:
+  specs:
+    - Specify observable behavior and invariants; do not restate SKILL.md steps, command lines, or reference-file contents
+    - Point to schema/*.schema.json for field-level JSON shape instead of duplicating it
+    - Scenarios should be checkable by running the skill or by schema/validate_contracts.py
+  tasks:
+    - When a change touches the analysis or validation-results JSON, include a task to update schema/, schema/examples/, and run validate_contracts.py --self-test
+    - When a change alters a hand-off, include a task to update every SKILL.md on both sides of it

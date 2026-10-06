@@ -220,7 +220,7 @@ Read `snap-validation-results.json`, and branch on the *kind* of result:
    counter, and return to **Step 3.1**. If the counter = 3, exit the loop to Phase 4 and
    report the devmode failure separately (do **not** count these against the 5-iteration
    denial cap).
- 3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
+3. **`clean == true`** → the denial loop is done. If OCI mode, go to **Phase 3.5**
    (reproducibility); otherwise go to **Phase 4**.
 4. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
    if = 5, exit the loop to Phase 4 carrying the unresolved denials for the final report.
@@ -240,7 +240,7 @@ Increment the denial-patch iteration count and return to **Step 3.1**.
 
 ## Phase 3.5: Reproducibility Loop (OCI mode only)
 
-Runs once the denial loop exits clean (Phase 3.3 case 2) in OCI mode. Cap: **3**
+Runs once the denial loop exits clean (Phase 3.3 case 3) in OCI mode. Cap: **3**
 iterations, tracked separately from the other two counters.
 
 ### 3.5.1 Delegate to: `snap-validator` (reproducibility check)
