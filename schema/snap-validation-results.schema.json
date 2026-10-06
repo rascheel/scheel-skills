@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://canonical.com/snap-orchestrator/snap-validation-results.schema.json",
+  "$id": "https://canonical.com/snap-builder/snap-validation-results.schema.json",
   "title": "snap-validation-results.json",
-  "description": "Report written by snap-validator and consumed by snap-packager (patch mode) and snap-orchestrator. Schema 1.1 is additive over 1.0: the OCI fields are optional and default to null/empty in the source-code case.",
+  "description": "Report written by snap-validator and consumed by snapcraft-author (patch mode) and snap-builder. Schema 1.1 is additive over 1.0: the OCI fields are optional and default to null/empty in the source-code case.",
   "type": "object",
   "required": ["schema_version", "snap_name", "confinement", "clean", "denials"],
   "properties": {

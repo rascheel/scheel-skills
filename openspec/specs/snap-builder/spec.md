@@ -1,4 +1,4 @@
-# snap-orchestrator Specification
+# snap-builder Specification
 
 ## Purpose
 Runs the end-to-end snap pipeline (analyze, package, validate, patch, rebuild) by delegating each phase to a focused sub-agent. It owns control flow, iteration limits and the final report. It does not do analysis, packaging or validation itself.
@@ -47,15 +47,15 @@ If the analysis records `confinement: classic`, the skill SHALL skip the validat
 ### Requirement: Result-driven loop routing
 After each validation run the skill SHALL route on the results in this order:
 1. Non-empty `diagnostics[]` stops the pipeline and reports them.
-2. `devmode_pass: false` sends the snap to the packager's build-fix branch.
+2. `devmode_pass: false` sends the snap to snapcraft-author's build-fix branch.
 3. `clean: true` ends the denial loop.
-4. Remaining denials send the snap to the packager's patch mode.
+4. Remaining denials send the snap to snapcraft-author's patch mode.
 
 After every patch or fix it SHALL rebuild and validate again.
 
 #### Scenario: Devmode failure
 - **WHEN** results have `devmode_pass: false`
-- **THEN** the packager is asked for a build fix, not a plug or layout patch, and the denial counter is not incremented
+- **THEN** snapcraft-author is asked for a build fix, not a plug or layout patch, and the denial counter is not incremented
 
 #### Scenario: Diagnostics reported
 - **WHEN** results contain diagnostics
@@ -69,7 +69,7 @@ The skill SHALL cap denial patching at 5 iterations, devmode build fixes at 3, a
 - **THEN** the loop ends and the final report lists the remaining denials with troubleshooting steps
 
 ### Requirement: OCI reproducibility loop
-In OCI mode, once the denial loop is clean, the skill SHALL ask the validator for a reproducibility check. Any diffs go to the packager as override steps, after which the full denial scan runs again before reproducibility is rechecked. A clean result, or `checked: false`, ends the loop.
+In OCI mode, once the denial loop is clean, the skill SHALL ask the validator for a reproducibility check. Any diffs go to snapcraft-author as override steps, after which the full denial scan runs again before reproducibility is rechecked. A clean result, or `checked: false`, ends the loop.
 
 #### Scenario: Override fix introduces a denial
 - **WHEN** a reproducibility fix is applied and the rebuilt snap triggers a new denial

@@ -1,7 +1,7 @@
 # snap-analyzer Specification
 
 ## Purpose
-Scans an application's source code and produces `snap-analysis.json`, the packaging specification that `snap-packager` turns into a snap. It records facts and decisions only and never writes snap artifacts.
+Scans an application's source code and produces `snap-analysis.json`, the packaging specification that `snapcraft-author` turns into a snap. It records facts and decisions only and never writes snap artifacts.
 
 ## Requirements
 
@@ -60,7 +60,7 @@ The skill SHALL list a hook in `hooks[]` only for a real lifecycle need (first-r
 The skill SHALL set top-level `target_arch` to `null` unless a non-host architecture is requested by the caller or the user. When one is requested, it MUST record one of the allowed architecture names and set `schema_version` to `"1.2"`; otherwise `schema_version` is `"1.0"`.
 
 #### Scenario: Cross-architecture request
-- **WHEN** the orchestrator passes target architecture `arm64`
+- **WHEN** snap-builder passes target architecture `arm64`
 - **THEN** the analysis has `target_arch: "arm64"` and `schema_version: "1.2"`
 
 #### Scenario: No architecture requested

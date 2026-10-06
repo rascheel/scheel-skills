@@ -20,7 +20,7 @@ machine-validated contract is `../../schema/snap-analysis.schema.json`.
     "config_json_path": "<path to extracted config.json>",
     "rootfs_path": "<path to extracted rootfs/>",
     "docker_to_snap_output_dir": "<output folder docker-to-snap produced>",
-    "docker_to_snap_snapcraft_path": "<scaffold snapcraft.yaml path for packager to start from>",
+    "docker_to_snap_snapcraft_path": "<scaffold snapcraft.yaml path for snapcraft-author to start from>",
     "target_arch": "amd64 | arm64 | armhf | i386 | ppc64el | s390x | riscv64",
     "entrypoint": ["<process.args from config.json>"],
     "working_dir": "<string or null>",

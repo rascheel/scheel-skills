@@ -3,7 +3,7 @@ schema: spec-driven
 context: |
   This repo is a set of AI agent skills (SKILL.md + references/scripts/assets per
   directory) that package applications as snaps. The pipeline is
-  analyzer -> packager -> validator, coordinated by snap-orchestrator; snap-trimmer
+  analyzer -> snapcraft-author -> validator, coordinated by snap-builder; snap-trimmer
   and snap-publisher are standalone. Skills communicate only through files:
   /tmp/snap-analysis-<dir>.json and snap-validation-results.json, whose field-level
   shape lives in schema/*.schema.json (checked by schema/validate_contracts.py).

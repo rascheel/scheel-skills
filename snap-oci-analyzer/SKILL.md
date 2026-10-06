@@ -7,7 +7,7 @@ description: >
   OCI metadata, and delegates binary analysis to analyze-binary-for-snapping. Emits the
   facts needed to package the image — interfaces, layouts, overrides, content interfaces,
   config options, system-usernames, glibc/merged-usr — as an `oci` block. Does NOT write
-  snapcraft.yaml; it is the OCI sibling of snap-analyzer, consumed by snap-packager. WHEN:
+  snapcraft.yaml; it is the OCI sibling of snap-analyzer, consumed by snapcraft-author. WHEN:
   OCI config to snap, container to snap, config.json snap analysis, docker save tarball to
   snap, docker image to snap, snap interfaces from OCI, snap layout from rootfs, OCI
   architecture to snapcraft build-for, snap confinement from container image, convert OCI
@@ -16,8 +16,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.1"
-  summary: "Analyzes OCI/Docker container input and writes snap-analysis.json (schema 1.1, with an oci block) — the packaging spec consumed by snap-packager."
+  version: "1.0.2"
+  summary: "Analyzes OCI/Docker container input and writes snap-analysis.json (schema 1.1, with an oci block) — the packaging spec consumed by snapcraft-author."
   tags:
     - snap
     - snapcraft
@@ -31,30 +31,30 @@ metadata:
 
 Analyzes an OCI/Docker container — from a Docker Hub URL, image reference, `docker save`
 tarball, or a pre-extracted `config.json` + `rootfs/` — and writes a `snap-analysis.json`
-that the `snap-packager` skill consumes to generate `snapcraft.yaml`, hooks, and a
+that the `snapcraft-author` skill consumes to generate `snapcraft.yaml`, hooks, and a
 packaging guide.
 
 This skill is the **OCI-input sibling** of `snap-analyzer`. Both are alternative
-producers of the *same* `snap-analysis.json` contract: `snap-orchestrator` picks
+producers of the *same* `snap-analysis.json` contract: `snap-builder` picks
 `snap-analyzer` for source-code projects and `snap-oci-analyzer` for container input.
 Everything here is **analysis and fact-gathering only**.
 
 > **This skill never writes `snapcraft.yaml`.** It records structured *facts* (plugs,
 > layouts, override steps, content interfaces, config options, arch, glibc/user facts)
 > in `snap-analysis.json`. Turning those facts into YAML — and every mutation of
-> `snapcraft.yaml` — is exclusively the `snap-packager` skill's job. In particular:
+> `snapcraft.yaml` — is exclusively the `snapcraft-author` skill's job. In particular:
 > record what `docker-to-snap` scaffolds as *paths and facts*; do not treat the scaffold
 > as the final recipe, and do not patch it here.
 
 > **`rootfs/` is a read-only source artifact.** Never write to, patch, chmod, delete,
 > or rewrite anything inside `rootfs/`. When the image needs a change to build/install/run
 > correctly (ELF-interpreter patching, symlink fixes, config edits), *record* it as an
-> `oci.overrides_needed[]` fact so the packager can encode it as an `override-build:` /
+> `oci.overrides_needed[]` fact so snapcraft-author can encode it as an `override-build:` /
 > `override-prime:` step. This keeps the final recipe self-contained and reproducible.
 
 > **Where the file goes:** write to a project-scoped path under `/tmp`, not the project
 > root — it is a transient hand-off artifact. Compute it once and reuse it (the
-> `snap-packager` skill reads the same path):
+> `snapcraft-author` skill reads the same path):
 >
 > ```bash
 > ANALYSIS_FILE="/tmp/snap-analysis-$(basename "$PWD").json"
@@ -146,7 +146,7 @@ filename-inference rules.
   ask if genuinely ambiguous.
 
 **Run docker-to-snap** — always include `--suppress-build` (the pipeline builds later via
-`snap-packager` / `snap-validator`):
+`snapcraft-author` / `snap-validator`):
 
 ```bash
 ./docker-to-snap \
@@ -180,7 +180,7 @@ ls snapcraft.yaml snap/snapcraft.yaml 2>/dev/null
 Record as facts (for the `oci` block): `config.json` path (`oci.config_json_path`),
 `rootfs/` path (`oci.rootfs_path`), the `docker-to-snap` output dir
 (`oci.docker_to_snap_output_dir`), and the scaffold snapcraft path
-(`oci.docker_to_snap_snapcraft_path`) — the packager *starts from* that scaffold rather
+(`oci.docker_to_snap_snapcraft_path`) — snapcraft-author *starts from* that scaffold rather
 than a blank template. Also record app name(s) under `apps:` in the scaffold, and the
 scaffold's `base:` value (currently `core26`) — it becomes `snap.base` in Phase 5.
 
@@ -194,10 +194,10 @@ ls -1 build_scripts/*.sh 2>/dev/null || echo "WARNING: build_scripts/ not popula
 Expected: `create_wrapper.sh`, `embed_rpath.sh`, `patch_coreutils_shebang.sh`,
 `patch_interpreter.sh`, `replace_absolute_symlinks.sh`. `patch_coreutils_shebang.sh` is
 shipped and wired by the tool — it rewrites coreutils-single applet shebangs at build
-time (see `references/override-steps-guide.md` §7b for the packager's detect-and-skip
+time (see `references/override-steps-guide.md` §7b for snapcraft-author's detect-and-skip
 rule). If missing, verify the generator's build-scripts source directory and re-run
 `docker-to-snap`. These scripts are **generated at extraction time, not shipped by any
-skill** — never copy them; the packager only invokes them.
+skill** — never copy them; snapcraft-author only invokes them.
 
 ---
 
@@ -216,7 +216,7 @@ Resolve the executable under `rootfs/` using `process.args[0]`.
 
 ### 1.1 — Derive the required snap build architecture
 
-Derive `target_arch` from container metadata; the packager bakes it into a `platforms:`
+Derive `target_arch` from container metadata; snapcraft-author bakes it into a `platforms:`
 stanza so the build targets exactly one architecture. Normalize OCI/Go arch names to
 Snapcraft/Debian names with this table (used verbatim):
 
@@ -273,7 +273,7 @@ PY
 ```
 
 Record the printed value as `oci.target_arch`. If it cannot be determined, stop and
-report the missing/unsupported metadata — do not emit an analysis the packager cannot
+report the missing/unsupported metadata — do not emit an analysis snapcraft-author cannot
 build.
 
 ```bash
@@ -296,7 +296,7 @@ print('arch:', c.get('annotations', {}).get('org.opencontainers.image.architectu
 
 Read the **detection** sections of `references/system-usernames-guide.md`. Inside a snap,
 daemons start as root; a non-root OCI user means privilege separation is needed via the
-`system-usernames` feature. **Detect and record only** — the packager renders the
+`system-usernames` feature. **Detect and record only** — snapcraft-author renders the
 `system-usernames:` stanza and any wrapper privilege-drop.
 
 Run the configurability-detection commands (`references/system-usernames-guide.md §3`) to
@@ -310,7 +310,7 @@ determine how the user is set, and record `oci.system_usernames`:
 | Binary calls `getpwnam()` + `setuid()` with the configured name | `getpwnam_hardcoded` |
 
 Set `oci.system_usernames.needed = true`, the `method`, and any `details` (var/flag/key
-name) the packager needs. Do **not** edit YAML or wrapper scripts here.
+name) snapcraft-author needs. Do **not** edit YAML or wrapper scripts here.
 
 ---
 
@@ -318,17 +318,17 @@ name) the packager needs. Do **not** edit YAML or wrapper scripts here.
 
 > **Always run before Phase 2.** Read the **detection** sections of
 > `references/glibc-compat-guide.md`. Detect and record only — the *fixes*
-> (command-path selection, RPATH embedding) are the packager's job.
+> (command-path selection, RPATH embedding) are snapcraft-author's job.
 
-- **Merged-/usr:** `[ -L rootfs/bin ]`. If merged, record `oci.merged_usr = true` (the
-  packager will use `usr/bin/` command paths and watch for stage collisions). If split
+- **Merged-/usr:** `[ -L rootfs/bin ]`. If merged, record `oci.merged_usr = true`
+  (snapcraft-author will use `usr/bin/` command paths and watch for stage collisions). If split
   (`false` — Alpine, RHEL, etc.), the generator emits a `bin/library_wrapper.sh` command
   path; note this fact.
 - **glibc:** compare OCI vs base-snap glibc versions and record `oci.glibc_compat`
   (`oci_glibc_version`, `base_snap_glibc_version`, `compatible`). If they differ, set
   `mitigation = "rpath_embed"` (never `LD_LIBRARY_PATH`); otherwise `mitigation = "none"`.
   The tool already wires `build_scripts/embed_rpath.sh` into the scaffold's
-  `override-build`; the packager does not add it.
+  `override-build`; snapcraft-author does not add it.
 
 ---
 
@@ -339,7 +339,7 @@ Invoke the `analyze-binary-for-snapping` skill and pass: the resolved binary pat
 
 > **Take Steps 1–6 (inference) only.** Instruct `analyze-binary-for-snapping` to produce
 > output and **skip its Step 7** (snapcraft.yaml patching) — this skill never writes YAML.
-> Its Step 7 patcher role is superseded by `snap-packager`.
+> Its Step 7 patcher role is superseded by `snapcraft-author`.
 
 Collect from the delegated output, to record as facts:
 
@@ -362,10 +362,10 @@ same facts (plugs, layouts, unmappable paths) as Phase 2.
 
 ---
 
-## Phase 4 — Discovery of packager-facing facts
+## Phase 4 — Discovery of snapcraft-author-facing facts
 
 The monolithic OCI skill's "apply to snapcraft.yaml" phase is split here into
-**discovery only**; the packager does the rendering. Gather these three fact sets.
+**discovery only**; snapcraft-author does the rendering. Gather these three fact sets.
 
 ### 4a — Override-step discovery (`oci.overrides_needed[]`)
 
@@ -380,9 +380,9 @@ file injection, deletions. For each, record a fact:
   "target_path": "<path inside rootfs>", "description": "<why it is needed>" }
 ```
 
-Record *what* changes and *why*; the exact override command is the packager's rendering
+Record *what* changes and *why*; the exact override command is snapcraft-author's rendering
 decision. (The validator's reproducibility phase later feeds more of these back through
-the packager.)
+snapcraft-author.)
 
 ### 4b — Content-interface discovery (`oci.content_interfaces[]`)
 
@@ -400,8 +400,8 @@ fact per role:
   "snap_name_hint": "<name>" }
 ```
 
-Note the "don't lay out the same path a content plug targets" rule in `notes[]` so the
-packager honors it. Slot/plug YAML is the packager's job.
+Note the "don't lay out the same path a content plug targets" rule in `notes[]` so
+snapcraft-author honors it. Slot/plug YAML is snapcraft-author's job.
 
 ### 4c — Operator-config discovery (`oci.config_options[]`)
 
@@ -423,8 +423,8 @@ For each exposed option record a fact (naming convention per the guide):
   "wiring": "cli_flag | env_var | layout" }
 ```
 
-The `configure`/`install` hook *bodies* and config-file wiring are rendered by the
-packager from these facts.
+The `configure`/`install` hook *bodies* and config-file wiring are rendered by
+snapcraft-author from these facts.
 
 ---
 
@@ -435,8 +435,8 @@ project root. Reuse the existing schema fields exactly as `snap-analyzer` does, 
 the new optional top-level `oci` block. Set `schema_version` to `"1.1"`.
 
 **Reused fields, OCI specifics:**
-- `snap.base` = the scaffold's `base:` recorded in Phase 0d (currently `"core26"`) — the
-  packager preserves the scaffold's base, so the analysis must report the same value, not
+- `snap.base` = the scaffold's `base:` recorded in Phase 0d (currently `"core26"`) —
+  snapcraft-author preserves the scaffold's base, so the analysis must report the same value, not
   `core24`. `snap.confinement = "strict"` (classic must never be used for OCI — if the
   user insists, follow `snap-analyzer`'s classic caveat flow).
 - `build.plugin = "dump"`, `build.plugin_config = {"source": "<rootfs_path>",
@@ -474,7 +474,7 @@ After writing the analysis, summarize in the chat (state the full `/tmp` path):
   and any **non-root user / glibc** facts
 - **Unmappable paths** and any assumptions recorded in `notes[]`
 
-Do **not** generate `snapcraft.yaml` or any snap artifact — that is the `snap-packager`
+Do **not** generate `snapcraft.yaml` or any snap artifact — that is the `snapcraft-author`
 skill's responsibility.
 
 ---
@@ -492,7 +492,7 @@ skill's responsibility.
 | `references/analysis-checklist.md` | Fallback binary/rootfs analysis checklist (Phase 3) |
 | `references/layout-constraints.md` | Validate layout targets (Phases 2–4) |
 | `references/override-steps-guide.md` | Inventory rootfs mutations for `oci.overrides_needed[]` (Phase 4a) |
-| `references/content-interface-discovery.md` | Identify provider/consumer facts for `oci.content_interfaces[]` (Phase 4b); packager renders them using its content-interface guide |
+| `references/content-interface-discovery.md` | Identify provider/consumer facts for `oci.content_interfaces[]` (Phase 4b); snapcraft-author renders them using its content-interface guide |
 | `references/analysis-output-contract.md` | JSON shape template for the complete OCI analysis artifact |
 | `scripts/ensure_dependencies.py` | Checks/installs local tool + Python dependencies |
 | `scripts/download_image.py` | Downloads Docker Hub URLs / image references as docker-archive tarballs |

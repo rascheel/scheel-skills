@@ -570,11 +570,11 @@ Choose whichever keeps the recipe most readable:
 
 ## Using `patch_snapcraft.py` to Apply Override Steps
 
-The `snap-packager`'s `scripts/patch_snapcraft.py` supports adding override steps directly:
+The `snapcraft-author`'s `scripts/patch_snapcraft.py` supports adding override steps directly:
 
 ```bash
-# Dry run — review before applying (run the snap-packager script)
-python3 snap-packager/scripts/patch_snapcraft.py \
+# Dry run — review before applying (run the snapcraft-author script)
+python3 snapcraft-author/scripts/patch_snapcraft.py \
   --snapcraft snap/snapcraft.yaml \
   --part oci-container \
   --override-build "patchelf --set-interpreter \$SNAPCRAFT_PART_INSTALL/lib/ld.so \$SNAPCRAFT_PART_INSTALL/usr/bin/myapp" \
@@ -582,7 +582,7 @@ python3 snap-packager/scripts/patch_snapcraft.py \
   --dry-run
 
 # Apply for real
-python3 snap-packager/scripts/patch_snapcraft.py \
+python3 snapcraft-author/scripts/patch_snapcraft.py \
   --snapcraft snap/snapcraft.yaml \
   --part oci-container \
   --override-build "patchelf --set-interpreter \$SNAPCRAFT_PART_INSTALL/lib/ld.so \$SNAPCRAFT_PART_INSTALL/usr/bin/myapp" \

@@ -1,7 +1,7 @@
 # snap-oci-analyzer Specification
 
 ## Purpose
-Analyzes container input (a Docker Hub URL, an image reference, a `docker save` tarball, or a pre-extracted `config.json` plus `rootfs/`) and produces `snap-analysis.json` with an `oci` block of container-specific facts for `snap-packager` to use. It never writes snap artifacts or modifies the image.
+Analyzes container input (a Docker Hub URL, an image reference, a `docker save` tarball, or a pre-extracted `config.json` plus `rootfs/`) and produces `snap-analysis.json` with an `oci` block of container-specific facts for `snapcraft-author` to use. It never writes snap artifacts or modifies the image.
 
 ## Requirements
 

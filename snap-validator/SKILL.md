@@ -4,7 +4,7 @@ description: >
   Validates snap packages by provisioning a clean LXD container, installing with
   --dangerous, running all declared CLI apps and daemons, and capturing AppArmor/SecComp
   denials via snappy-debug. Records denials in snap-validation-results.json for
-  snap-packager to act on — never patches snapcraft.yaml directly. Hard-stops for classic
+  snapcraft-author to act on — never patches snapcraft.yaml directly. Hard-stops for classic
   confinement. Runs a devmode-first crash check, flags store-review-only interfaces, and
   selects an arch-appropriate test environment for any cross-architecture build (OCI or
   general). Also reports OCI rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.4.0"
+  version: "1.4.1"
   summary: "Runs a snap in LXD: reports denials, devmode, store-review interfaces, and arch-aware test env; OCI reproducibility — never patches yaml."
   tags:
     - snap
@@ -33,7 +33,7 @@ app and daemon, captures AppArmor/SecComp denials with `snappy-debug`, and **rep
 plugs that are actually required. Classic-confinement snaps are excluded.
 
 > **This skill never patches `snapcraft.yaml` and never rebuilds.** It validates and
-> *reports*; the caller (typically `snap-orchestrator`, acting through `snap-packager`)
+> *reports*; the caller (typically `snap-builder`, acting through `snapcraft-author`)
 > patches and rebuilds. This is true for every phase below, including the OCI reproducibility
 > phase, which only computes and reports the diff.
 
@@ -64,7 +64,7 @@ Read `snap/snapcraft.yaml` and extract:
 ### 1.1a Detect OCI mode
 
 Read `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`) when the caller
-provides it — `snap-orchestrator` passes this path. **OCI mode is true iff the analysis
+provides it — `snap-builder` passes this path. **OCI mode is true iff the analysis
 file's top-level `oci` key is present.** If the analysis file was not passed, fall back to
 detecting a `rootfs/` directory in the project root as a secondary signal. Resolve an
 **effective target architecture**: `oci.target_arch` in OCI mode, otherwise the analysis
@@ -164,7 +164,7 @@ or library errors.
 
 - **Pass:** set `devmode_pass: true`, `devmode_notes: []`, and continue to Step 3.
 - **Fail:** set `devmode_pass: false`, populate `devmode_notes[]`, write results, and
-  **STOP before the strict scan.** The orchestrator routes this to `snap-packager`'s
+  **STOP before the strict scan.** snap-builder routes this to `snapcraft-author`'s
   build-fix branch (not the denial-patch loop) — do not suggest plugs or layouts for a
   crash-on-start failure.
 
@@ -288,13 +288,13 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
   that the strict scan did not run (leave `denials: []`); the build fix is the caller's job.
 
 **Do not patch `snapcraft.yaml` or rebuild the snap.** The caller (or the
-`snap-orchestrator` skill) is responsible for acting on the results.
+`snap-builder` skill) is responsible for acting on the results.
 
 ---
 
 ## Step 3.5: Rootfs reproducibility check (OCI mode only)
 
-> **OCI mode only, and only when invoked for the reproducibility check** — the orchestrator
+> **OCI mode only, and only when invoked for the reproducibility check** — snap-builder
 > calls this once the denial loop is clean (Phase 3.5). Skip in the base case. Ported from
 > `snap-iteration-workflow` Phase 5 / `snap-oci-container` Phase 6. **Report only — this
 > skill never patches or rebuilds.**
@@ -327,7 +327,7 @@ Prove the recipe reproduces the snap from a clean extraction:
 - If the original image cannot be reproduced (no tarball, download fails), set
   `"checked": false`, leave `diffs: []`, and note the reason in `devmode_notes`/summary.
 
-The orchestrator routes any non-empty `diffs[]` to `snap-packager` (which encodes them as
+snap-builder routes any non-empty `diffs[]` to `snapcraft-author` (which encodes them as
 override steps) and loops back; this skill's role ends at reporting the diff.
 
 ---

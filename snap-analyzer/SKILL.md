@@ -5,15 +5,15 @@ description: >
   captures everything needed to package the app as a snap: language/runtime, build system,
   entry points, system resource requirements, snap plugin recommendation, interface list,
   hook requirements, confinement type, and layout needs. Does NOT write snapcraft.yaml —
-  its output is consumed by the snap-packager skill. WHEN: analyze snap requirements,
+  its output is consumed by the snapcraft-author skill. WHEN: analyze snap requirements,
   snap analysis, scan for snap interfaces, identify snap plugs, snap project analysis,
   pre-packaging scan, snap dependency discovery, snap confinement analysis, snap interface
   mapping, prepare snap packaging.
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.0"
-  summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snap-packager, including target_arch for cross-arch builds."
+  version: "1.2.1"
+  summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snapcraft-author, including target_arch for cross-arch builds."
   tags:
     - snap
     - snapcraft
@@ -25,7 +25,7 @@ metadata:
 # Snap Analyzer
 
 Scans the current project directory and writes a `snap-analysis.json` — a complete
-packaging specification that the `snap-packager` skill consumes to generate
+packaging specification that the `snapcraft-author` skill consumes to generate
 `snapcraft.yaml`, lifecycle hooks, and a packaging guide.
 
 > **Where the file goes:** write it to a project-scoped path under `/tmp`, not the
@@ -36,7 +36,7 @@ packaging specification that the `snap-packager` skill consumes to generate
 > /tmp/snap-analysis-<dirname>.json     where <dirname> = basename of the project dir
 > ```
 >
-> Compute it once and reuse it verbatim (the `snap-packager` skill reads the same path):
+> Compute it once and reuse it verbatim (the `snapcraft-author` skill reads the same path):
 >
 > ```bash
 > ANALYSIS_FILE="/tmp/snap-analysis-$(basename "$PWD").json"
@@ -129,7 +129,7 @@ Choose the snapcraft plugin that best fits the build:
 | Pre-built binaries / scripts only | `dump` |
 
 If post-build steps are needed on top of a language plugin (e.g. fetching assets,
-compiling grammars), note them in `build.override_build_extra` — the packager will add an
+compiling grammars), note them in `build.override_build_extra` — snapcraft-author will add an
 `override-build` that calls `craftctl default` first then appends the extra steps.
 
 ---
@@ -220,10 +220,10 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 - `layouts`: only include when the app hardcodes paths outside of snap-writable locations
 - `hooks`: empty array `[]` when no hooks are needed
 - `notes`: include classic-confinement store-review warning if applicable; include any
-  assumption that the packager cannot verify without reading the source
+  assumption that snapcraft-author cannot verify without reading the source
 - `target_arch`: `null` means build for the host architecture (the default — leave it `null`
   unless a non-host architecture was explicitly requested). When the caller
-  (`snap-orchestrator`'s Phase 0.1a) provides a target architecture, or the user names one
+  (`snap-builder`'s Phase 0.1a) provides a target architecture, or the user names one
   directly, record it as one of `amd64`/`arm64`/`armhf`/`i386`/`ppc64el`/`s390x`/`riscv64`
   and set `schema_version` to `"1.2"` — otherwise leave `schema_version` at `"1.0"`
 
@@ -232,7 +232,7 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 ## Step 7: Report
 
 After writing the analysis file, summarize in the chat (state the full `/tmp` path so the
-user and the `snap-packager` skill know where it is):
+user and the `snapcraft-author` skill know where it is):
 
 - **Language / plugin** chosen and why
 - **Confinement** chosen and why (especially if classic)
@@ -242,7 +242,7 @@ user and the `snap-packager` skill know where it is):
 - Any open questions or assumptions recorded in `notes`
 
 Do **not** generate `snapcraft.yaml` or any other snap artifact — that is the
-`snap-packager` skill's responsibility.
+`snapcraft-author` skill's responsibility.
 
 ---
 

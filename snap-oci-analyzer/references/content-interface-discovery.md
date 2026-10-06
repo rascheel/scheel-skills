@@ -60,6 +60,6 @@ Record one fact per role. Provider and consumer entries must use the same
 - Do not set `default-provider` for locally built snaps; document the manual connection
   instead.
 
-`snap-packager` renders these facts. Read its
-`snap-packager/references/content-interface-guide.md` for the exact slot/plug YAML and runtime
+`snapcraft-author` renders these facts. Read its
+`snapcraft-author/references/content-interface-guide.md` for the exact slot/plug YAML and runtime
 connection commands; do not write `snapcraft.yaml` from this skill.

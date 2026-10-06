@@ -178,7 +178,7 @@ snapctl set log-level=info
 
 ### 3.4 Template: `snap/hooks/install`
 
-See `snap-packager/assets/install-hook-additions.sh` for a full template.
+See `snapcraft-author/assets/install-hook-additions.sh` for a full template.
 
 ---
 
@@ -312,7 +312,7 @@ Check whether the snap is a daemon (`--do-not-daemonize` was NOT passed to
 
 ### 4.4 Template: `snap/hooks/configure`
 
-See `snap-packager/assets/configure-hook-template.sh` for a full template.
+See `snapcraft-author/assets/configure-hook-template.sh` for a full template.
 
 ---
 

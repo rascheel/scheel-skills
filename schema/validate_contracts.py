@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-validate_contracts.py — LXD-free contract gate for the snap-orchestrator pipeline.
+validate_contracts.py — LXD-free contract gate for the snap-builder pipeline.
 
 Validates snap-analysis.json and snap-validation-results.json against the documented
 schema 1.0 through 1.2 shapes. It is the living definition of the "additive, optional-field" promise
-between snap-analyzer / snap-oci-analyzer, snap-packager, and snap-validator.
+between snap-analyzer / snap-oci-analyzer, snapcraft-author, and snap-validator.
 
 Usage:
     # Validate the bundled examples (OCI-populated and source-case):

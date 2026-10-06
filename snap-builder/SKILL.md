@@ -1,21 +1,21 @@
 ---
-name: snap-orchestrator
+name: snap-builder
 description: >
-  Coordinates snap-analyzer, snap-packager, and snap-validator as sequential
-  sub-agents to take a project from source code to a validated, installable snap with correct
-  interfaces. Manages the full pipeline: analyze → package → validate → patch → rebuild,
+  Entry point for packaging any application as a snap — start here. Takes a source-code
+  project or OCI/Docker container input all the way to a validated, installable snap with
+  correct interfaces by coordinating snap-analyzer (or snap-oci-analyzer), snapcraft-author,
+  and snap-validator as sequential sub-agents: analyze → package → validate → patch → rebuild,
   looping the validate/patch/rebuild cycle until the snap runs clean or a maximum iteration
   limit is reached. Each sub-agent runs in its own focused context to minimize token usage.
-  It selects snap-analyzer for source-code projects and snap-oci-analyzer for OCI/Docker
-  container input, and drives the same package → validate → patch loop for both.
-  WHEN: full snap pipeline, snap from scratch, end-to-end snap packaging, snap build and
-  validate, snap orchestrate, build and test snap, snap pipeline, automate snap packaging,
-  snap workflow, package and validate snap, OCI container to snap pipeline, docker image to
-  snap pipeline, container to snap end-to-end.
+  WHEN: package as snap, snap this application, make a snap, create snap, convert to snap,
+  add snap support, snap packaging, package with snapcraft, snap from scratch, full snap
+  pipeline, end-to-end snap packaging, build and test snap, package and validate snap,
+  automate snap packaging, snap workflow, docker image to snap, container to snap,
+  OCI container to snap, snap containerize, build a snap, snap build.
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.4.0"
+  version: "2.0.0"
   summary: "End-to-end snap pipeline for source or OCI input: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
   tags:
     - snap
@@ -26,11 +26,11 @@ metadata:
     - pipeline
 ---
 
-# Snap Orchestrator
+# Snap Builder
 
 Runs the full snap packaging pipeline by delegating each phase to a focused sub-agent.
 Each sub-agent works with minimal context, communicates through files on disk, and exits
-when its phase is done. The orchestrator manages control flow and the patch loop.
+when its phase is done. This skill manages control flow and the patch loop.
 
 ---
 
@@ -45,9 +45,9 @@ producer/consumer still interoperates.
 
 | File | Written by | Read by | Purpose |
 |---|---|---|---|
-| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snap-packager, snap-validator | Full packaging specification (transient); an `oci` key marks container input, a top-level `target_arch` marks a non-host source build |
-| `snap/snapcraft.yaml` | snap-packager | snap-validator, snap-packager (patch) | Snap manifest (packager is the sole writer) |
-| `snap-validation-results.json` | snap-validator | snap-packager (patch), orchestrator | Denial report + diagnostics + devmode / store-review findings (every run) + (OCI) reproducibility findings |
+| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snapcraft-author, snap-validator | Full packaging specification (transient); an `oci` key marks container input, a top-level `target_arch` marks a non-host source build |
+| `snap/snapcraft.yaml` | snapcraft-author | snap-validator, snapcraft-author (patch) | Snap manifest (snapcraft-author is the sole writer) |
+| `snap-validation-results.json` | snap-validator | snapcraft-author (patch), snap-builder | Denial report + diagnostics + devmode / store-review findings (every run) + (OCI) reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,
@@ -163,7 +163,7 @@ classic is a source-path edge case.)
 
 ## Phase 2: Initial Packaging
 
-**Delegate to: `snap-packager`**
+**Delegate to: `snapcraft-author`**
 
 Provide this context to the sub-agent:
 - The analysis is at `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`)
@@ -171,7 +171,7 @@ Provide this context to the sub-agent:
 - Goal: write `snap/snapcraft.yaml`, `snap/hooks/*`, `SNAP_PACKAGING.md`, and produce a
   built `.snap` file in the project root
 
-No orchestrator-level branch is needed here: `snap-packager` self-detects the `oci` key and
+No pipeline-level branch is needed here: `snapcraft-author` self-detects the `oci` key and
 takes its OCI rendering path (Step 2a variant) or the source path automatically.
 
 Wait until a `.snap` file exists in the project root before continuing.
@@ -215,7 +215,7 @@ Read `snap-validation-results.json`, and branch on the *kind* of result:
    pre-flight failures (for example, a missing `.snap`), not denial-patch candidates.
 2. **`devmode_pass == false`** → this is a **build-correctness** failure, not a
    denial — can arise for any snap, OCI or source-built. If the devmode build-fix counter
-   < 3, delegate to `snap-packager`'s **build-fix branch** (Step 2b case (c) — consumes
+   < 3, delegate to `snapcraft-author`'s **build-fix branch** (Step 2b case (c) — consumes
    `devmode_notes[]`, does **not** touch plugs/layouts), rebuild, increment the devmode
    counter, and return to **Step 3.1**. If the counter = 3, exit the loop to Phase 4 and
    report the devmode failure separately (do **not** count these against the 5-iteration
@@ -225,7 +225,7 @@ Read `snap-validation-results.json`, and branch on the *kind* of result:
 4. **`clean == false`** (denials present) → if the denial counter < 5, continue to Step 3.4;
    if = 5, exit the loop to Phase 4 carrying the unresolved denials for the final report.
 
-### 3.4 Delegate to: `snap-packager` (patch mode)
+### 3.4 Delegate to: `snapcraft-author` (patch mode)
 
 Provide this context to the sub-agent:
 - `snap-validation-results.json` is present with `"clean": false`
@@ -257,9 +257,9 @@ populate the `reproducibility` block in `snap-validation-results.json`. It repor
 - If non-empty and the counter = 3 → exit to Phase 4, carrying the unresolved diffs for the
   "Unresolved Reproducibility Diffs" section.
 
-### 3.5.3 Delegate to: `snap-packager` (patch mode) + re-enter Phase 3
+### 3.5.3 Delegate to: `snapcraft-author` (patch mode) + re-enter Phase 3
 
-Delegate to `snap-packager`'s Step 2b case (d): encode each diff as an
+Delegate to `snapcraft-author`'s Step 2b case (d): encode each diff as an
 `override-build`/`override-prime` step and rebuild. Because a new override can in principle
 reintroduce a confinement denial, **return to the full Phase 3 denial scan** (Step 3.1) with
 the rebuilt `.snap`, then come back to Phase 3.5. Increment the reproducibility counter.
@@ -324,7 +324,7 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 
 1. Inspect the delta manually against `rootfs_original/` and encode it as an
    `override-build`/`override-prime` step in `snap/snapcraft.yaml`
-2. Consult `snap-packager`'s `references/override-steps-guide.md` for the command idiom
+2. Consult `snapcraft-author`'s `references/override-steps-guide.md` for the command idiom
 3. Rebuild and re-run the validator's reproducibility check
 
 ---
@@ -335,11 +335,11 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 |---|---|
 | snap-analyzer / snap-oci-analyzer fails or produces invalid JSON | Stop; show the error; ask user to check the project or image reference |
 | OCI dependencies unresolvable (`skopeo`/`umoci`/`jq`) | Stop; show `ensure_dependencies.py` stderr; the OCI path cannot proceed without them |
-| snap-packager build fails after 3 rebuild attempts | Stop; show the last `snapcraft pack` error output |
+| snapcraft-author build fails after 3 rebuild attempts | Stop; show the last `snapcraft pack` error output |
 | Devmode build-fix loop exhausted (3 attempts) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
 | Reproducibility loop exhausted (3 iterations, OCI) | Exit to Phase 4; list unresolved diffs in the "Unresolved Reproducibility Diffs" section |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
 | Validator reports diagnostics | Stop; show each diagnostic; fix the reported pre-flight failure before rerunning validation |
 | LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement confirmed after Phase 1 | Skip Phase 3; proceed to the Final Report (Phase 4); remind user of Store approval requirement and Ubuntu Core incompatibility |
-| `.snap` file missing after snap-packager runs | Stop; show the last build output |
+| `.snap` file missing after snapcraft-author runs | Stop; show the last build output |

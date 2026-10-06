@@ -1,16 +1,16 @@
 # Pipeline contract schemas
 
-The living definition of the two JSON files the `snap-orchestrator` sub-agents exchange:
+The living definition of the two JSON files the `snap-builder` sub-agents exchange:
 
 - `snap-analysis.schema.json` — written by `snap-analyzer` (source) or `snap-oci-analyzer`
-  (OCI), read by `snap-packager`. Schema **1.1** = schema 1.0 **plus** the optional
+  (OCI), read by `snapcraft-author`. Schema **1.1** = schema 1.0 **plus** the optional
   top-level `oci` block (present only for container input). Schema **1.2** = schema 1.1
   **plus** the optional top-level `target_arch` field, for cross-architecture *source*
   builds — mutually exclusive with `oci.target_arch` (the schema rejects an analysis that
   sets both), which remains the authoritative source for OCI-derived snaps (a container
   image is single-arch by construction).
 - `snap-validation-results.schema.json` — written by `snap-validator`, read by
-  `snap-packager` (patch mode) and `snap-orchestrator`. Schema **1.1** = schema 1.0 **plus**
+  `snapcraft-author` (patch mode) and `snap-builder`. Schema **1.1** = schema 1.0 **plus**
   the optional fields `diagnostics`, `oci_mode`, `devmode_pass`, `devmode_notes`,
   `target_arch`, `test_environment_used`, `store_review_interfaces`, `reproducibility`.
   `devmode_pass`/`devmode_notes` and `store_review_interfaces` are populated for every run

@@ -36,18 +36,18 @@ The validator SHALL report results in `snap-validation-results.json` in the proj
 - **THEN** `snap-validation-results.json` has `clean: false`, `denials: []`, and a `diagnostics[]` entry with code `missing-snap`
 
 ### Requirement: Single writer of the manifest
-Within a pipeline run, `snap-packager` SHALL be the only skill that creates or modifies `snap/snapcraft.yaml`. Analyzers MUST record facts only, and the validator MUST only report.
+Within a pipeline run, `snapcraft-author` SHALL be the only skill that creates or modifies `snap/snapcraft.yaml`. Analyzers MUST record facts only, and the validator MUST only report.
 
 #### Scenario: Validator finds a denial
 - **WHEN** the validator observes a denial that needs a new plug
 - **THEN** it records the suggestion in `snap-validation-results.json`
-- **AND** `snap/snapcraft.yaml` is unchanged until `snap-packager` runs in patch mode
+- **AND** `snap/snapcraft.yaml` is unchanged until `snapcraft-author` runs in patch mode
 
 ### Requirement: Additive schema evolution
 Schema version bumps SHALL be additive: a new version MAY only add optional fields, so producers and consumers of an earlier version keep interoperating. Supported versions are `1.0`, `1.1` (adds the `oci` block) and `1.2` (adds top-level `target_arch`) for the analysis, and `1.0` and `1.1` for validation results.
 
 #### Scenario: Consumer reads an older analysis
-- **WHEN** `snap-packager` reads a schema `1.0` analysis
+- **WHEN** `snapcraft-author` reads a schema `1.0` analysis
 - **THEN** it packages the snap exactly as it would a `1.1` analysis that has no `oci` block
 
 ### Requirement: Single source of target architecture

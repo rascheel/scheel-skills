@@ -1,4 +1,4 @@
-# snap-packager Specification
+# snapcraft-author Specification
 
 ## Purpose
 Turns `snap-analysis.json` into a buildable snap: writes `snap/snapcraft.yaml`, lifecycle hooks and `SNAP_PACKAGING.md`, then builds the `.snap`. In patch mode it applies fixes reported by `snap-validator` and rebuilds. It is the only skill in the pipeline that writes the manifest.

@@ -11,7 +11,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.0"
+  version: "1.0.1"
   summary: "Interactively publishes, releases, and promotes snap packages to the Snap Store with user confirmation at every step."
   tags:
     - snap
@@ -32,7 +32,7 @@ channel, and promoting an existing revision between channels. Every destructive 
 publishing action requires explicit user confirmation.
 
 > This skill does NOT build snaps. It expects a `.snap` file to already exist (e.g.,
-> produced by the `snap-packager` skill or `snapcraft pack`).
+> produced by the `snapcraft-author` skill or `snapcraft pack`).
 
 ## Workflow Decision Tree
 

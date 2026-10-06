@@ -1,20 +1,22 @@
 ---
-name: snap-packager
+name: snapcraft-author
 description: >
-  Reads a snap-analysis.json file produced by the snap-analyzer skill and generates all files
-  needed to package the application as a snap: snapcraft.yaml targeting core24 and snapcraft 8.x,
-  lifecycle hooks, and a SNAP_PACKAGING.md guide documenting how to build, install, and test the
-  snap and which connectors must be enabled. Runs snapcraft pack and iterates until the build
-  succeeds. WHEN: package as snap, create snapcraft.yaml, snap this application, snap packaging,
-  convert to snap, create snap, add snap support, snap confinement, snapcraft configuration,
-  snap interfaces, snap hooks, snap build, package with snapcraft, core24 snap, snapcraft 8,
-  make a snap, write snapcraft yaml, snap containerize, generate snap files,
-  OCI config to snap, container to snap, snap platforms build-for, system-usernames,
-  snap override-build, snap content interface, snap configure hook from OCI.
+  Pipeline stage, normally invoked by the snap-builder skill — to package an application
+  as a snap, use snap-builder instead. Reads a snap-analysis.json file produced by
+  snap-analyzer or snap-oci-analyzer and generates all files needed to package the
+  application as a snap: snapcraft.yaml targeting core24 and snapcraft 8.x, lifecycle hooks,
+  and a SNAP_PACKAGING.md guide documenting how to build, install, and test the snap and
+  which connectors must be enabled. Runs snapcraft pack and iterates until the build
+  succeeds; in patch mode, applies snap-validation-results.json findings. Use directly only
+  to (re)generate packaging from an existing snap-analysis.json. WHEN: render snapcraft.yaml
+  from snap-analysis.json, regenerate snapcraft.yaml, patch snapcraft.yaml from validation
+  results, write snapcraft yaml, snapcraft configuration, snap hooks, snap platforms
+  build-for, system-usernames, snap override-build, snap content interface, snap configure
+  hook from OCI.
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.3.0"
+  version: "2.0.0"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -25,7 +27,7 @@ metadata:
     - core24
 ---
 
-# Snap Packager
+# Snapcraft Author
 
 ## Overview
 
@@ -232,7 +234,7 @@ store-review-only interfaces the validator flags.
 
 Read `snap-validation-results.json` and branch on the *kind* of remediation. Use
 `scripts/patch_snapcraft.py` for supported app plugs, layouts, and part overrides (Step
-2.4); render required top-level structures directly as part of the packager's manifest
+2.4); render required top-level structures directly as part of snapcraft-author's manifest
 work.
 
 **Validation diagnostics:** If `diagnostics[]` is non-empty, do not mutate the manifest
@@ -267,7 +269,7 @@ After patching, proceed directly to **Step 3** to rebuild.
 
 ### Step 2.4: `patch_snapcraft.py` — the incremental patcher
 
-`scripts/patch_snapcraft.py` is the packager's **only** tool for mutating
+`scripts/patch_snapcraft.py` is snapcraft-author's **only** tool for mutating
 supported incremental `apps`, `layout`, and `parts` entries in Step 2b. It is idempotent
 (skips plugs/layouts/override-commands already present), `--dry-run`-capable, and writes
 a `snapcraft.yaml.bak` before saving. It does not render initial manifests or named
