@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "2.0.0"
+  version: "2.1.0"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -77,7 +77,7 @@ do not re-inspect the source code. The fields are:
 
 | Field | Meaning |
 |---|---|
-| `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), or `"1.2"` (may carry a top-level `target_arch`) |
+| `schema_version` | `"1.0"`, `"1.1"` (may carry an `oci` block), `"1.2"` (may carry a top-level `target_arch`), or `"1.3"` (may carry a top-level `config_options`) |
 | `project.*` | Snap name, version, summary, description, license, grade |
 | `snap.base` | `core24` for source-built snaps; in OCI mode it mirrors the scaffold's own `base:` (currently `core26`), which is preserved — if the two ever differ, the scaffold wins |
 | `snap.confinement` | `strict` or `classic` |
@@ -91,6 +91,7 @@ do not re-inspect the source code. The fields are:
 | `interfaces[].auto_connected` | Drives whether a `snap connect` command appears in SNAP_PACKAGING.md |
 | `notes[]` | Caveats to surface in the chat summary and SNAP_PACKAGING.md |
 | `target_arch` (top-level, general path) | Non-null triggers a `platforms:` stanza — same rendering as `oci.target_arch` below, mutually exclusive with it |
+| `config_options[]` (top-level, general path) | Source-mode `configure`/`install` hook bodies and the `snap set` keys in SNAP_PACKAGING.md (see "Source-mode snap options" below) |
 
 **OCI-mode detection:** if the top-level `oci` key is present, this analysis describes a
 container image; switch Step 2a into **OCI rendering mode** and read these additional
@@ -144,6 +145,24 @@ One shell script per hook named in `hooks[]`. Consult `references/snap-hooks-ref
 for the correct hook body for each type. Begin each with `#!/bin/bash` and `set -e`. Keep
 hooks minimal — they run as root and must complete quickly.
 
+**Source-mode snap options.** When the analysis has a non-empty top-level
+`config_options[]`, render the `configure` hook from it (Pattern B in
+`references/snap-hooks-reference.md`, or `assets/configure-hook-template.sh`):
+- Read each option with `snapctl get <key>` and validate it by `type`, **only when the
+  value is non-empty**: `port` → integer 1–65535, `integer` → digits, `boolean` →
+  `true`/`false`, `enum` → one of `allowed_values`, `path`/`string` → no check. Exit
+  non-zero with a message naming the key on a bad value, so `snap set` fails.
+- If any option has `restart_required: true`, restart each daemon app, but only when
+  `snapctl services "$SNAP_INSTANCE_NAME.<app>"` reports it `active` — snapd runs this
+  hook during installation, before services start.
+- For options with `source: "snapctl"`, write **no** config file: the app reads the value
+  itself. Options with another `source` are wired as in OCI mode (config file, env file or
+  CLI flag under `$SNAP_COMMON`).
+
+When `install` is listed, the install hook seeds each option whose `default` is non-null,
+only if the key is unset: `[ -n "$(snapctl get <key>)" ] || snapctl set <key>=<default>`.
+The analysis guarantees `configure` is listed whenever `config_options[]` is non-empty.
+
 **`SNAP_PACKAGING.md`**
 Include:
 1. Prerequisites (snapcraft install, LXD or Multipass setup)
@@ -156,6 +175,9 @@ Include:
 8. Any items from `notes[]` in `snap-analysis.json` that the user should be aware of
 9. If `target_arch` is non-null, note the target architecture and that the `platforms:`
    stanza already pins it — no `--build-for` flag is needed on `snapcraft pack`
+10. For every snap option (top-level `config_options[]` or `oci.config_options[]`), a
+    `snap set <snap> <key>=<value>` example with its type, default and allowed values, and
+    whether changing it restarts a daemon
 
 ### Step 2a (OCI variant): OCI rendering mode
 
@@ -227,7 +249,7 @@ this skill — never copy it, only wire the call). **Never add `LD_LIBRARY_PATH`
 `environment:` for a glibc mismatch — use RPATH embedding.
 
 Then write `SNAP_PACKAGING.md` as in initial mode, additionally documenting: the target
-architecture, any `snap set <key>` config options, content interfaces to connect, and
+architecture, content interfaces to connect, and
 store-review-only interfaces the validator flags.
 
 ### Step 2b: Patch snapcraft.yaml (patch mode)
@@ -238,8 +260,11 @@ Read `snap-validation-results.json` and branch on the *kind* of remediation. Use
 work.
 
 **Validation diagnostics:** If `diagnostics[]` is non-empty, do not mutate the manifest
-or rebuild. Report each diagnostic and stop so the caller can resolve the pre-flight
-failure (for example, build the missing `.snap` artifact) before validation is retried.
+or rebuild. Report each diagnostic and stop so the caller can resolve the failure (for
+example, build the missing `.snap` artifact) before validation is retried. This includes
+`config-set-failed` (snapd rejected `snap set`, for example because the snap has no
+`configure` hook): hooks come from the analysis, so don't add or rewrite one here — report
+snapd's error and stop.
 
 **(a) Denial → plug** (base case, all modes). For each entry in `denials[]`:
 - Add `interface_suggestion` to `apps.<app>.plugs` (idempotent — never duplicate):
@@ -346,6 +371,7 @@ After the build succeeds, summarize in the chat:
 - Files created and their locations
 - Plugin choice and confinement level (sourced from `snap-analysis.json`)
 - Interfaces that require manual `snap connect`
+- Snap options and their `snap set` keys, if any
 - Any notes from `snap-analysis.json` the user should act on
 
 ## Key Rules
@@ -380,10 +406,10 @@ After the build succeeds, summarize in the chat:
 | File | Purpose |
 |---|---|
 | `assets/snapcraft.yaml.template` | Structural reference for the initial (non-OCI) manifest |
-| `assets/configure-hook-template.sh` | Starter `snap/hooks/configure` with validation for common option types (OCI mode) |
+| `assets/configure-hook-template.sh` | Starter `snap/hooks/configure` with validation for common option types (OCI mode, and source-mode snap options) |
 | `assets/install-hook-additions.sh` | Additions to merge into a `docker-to-snap` install hook for default config + initial keys (OCI mode) |
 | `references/snapcraft-core24-reference.md` | core24 / snapcraft 8.x field syntax |
-| `references/snap-hooks-reference.md` | Lifecycle hooks + OCI operator-configuration hook-body rendering |
+| `references/snap-hooks-reference.md` | Lifecycle hooks (including source-mode `configure` patterns) + OCI operator-configuration hook-body rendering |
 | `references/snap-interfaces-catalog.md` | Interface names and AC/MC status |
 | `references/override-steps-guide.md` | Map rootfs/prime mutations → `override-build`/`override-prime` (OCI mode) |
 | `references/content-interface-guide.md` | Content slot/plug rendering + double-bind rule (OCI mode) |

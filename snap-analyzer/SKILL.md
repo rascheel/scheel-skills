@@ -12,7 +12,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.2.1"
+  version: "1.3.0"
   summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snapcraft-author, including target_arch for cross-arch builds."
   tags:
     - snap
@@ -153,9 +153,19 @@ Consult `references/snap-hooks-reference.md`. Add a hook to the list **only** wh
 app has a genuine lifecycle requirement:
 
 - `install` — first-run directory creation, initial config, default values
-- `configure` — respond to `snap set` changes
+- `configure` — validate and apply `snap set` changes. **Required whenever the snap has
+  any snap option**: snapd rejects every `snap set` on a snap without a `configure` hook
+  (`snap "<name>" has no "configure" hook`), even when the app reads the option itself.
 - `connect-plug-*` / `disconnect-plug-*` — react to interface connect/disconnect
 - `pre-refresh` / `post-refresh` — state migration around updates
+
+**Snap options.** Search the whole repository (including wrapper scripts and sourced
+helpers) for `snapctl get`, and note any option your plan seeds with `snapctl set`. Record
+each such option once in top-level `config_options[]` (see Step 6). Whenever
+`config_options[]` is non-empty:
+
+- list `configure` in `hooks` — the pipeline's contract schema rejects an analysis that doesn't
+- list `install` when any option has a non-null `default`, so the install hook can seed it
 
 ---
 
@@ -166,7 +176,7 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.3",
   "project": {
     "name": "<snap-name>",
     "version": "<version>",
@@ -197,6 +207,16 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
     }
   ],
   "hooks": ["<hook-name>"],
+  "config_options": [
+    {
+      "key": "<snap option key, e.g. daemon.port>",
+      "source": "snapctl",
+      "type": "port | enum | integer | boolean | path | string",
+      "allowed_values": [],
+      "default": "<default value as a string, or null>",
+      "restart_required": true
+    }
+  ],
   "layouts": {
     "<snap-path>": { "bind": "<snap-variable-path>" }
   },
@@ -218,14 +238,23 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 - `apps[].plugs`: list only interface names, not full plug definitions
 - `build.plugin_config`: plugin-specific keys (e.g. `{"go-importpath": "..."}` for the go plugin)
 - `layouts`: only include when the app hardcodes paths outside of snap-writable locations
-- `hooks`: empty array `[]` when no hooks are needed
+- `hooks`: empty array `[]` when no hooks are needed; must contain `configure` whenever
+  `config_options` is non-empty
+- `config_options`: one entry per snap option (omit the field, or use `[]`, when there are
+  none). `source` is `"snapctl"` when the app or its wrapper reads the option with
+  `snapctl get`. `type` drives the validation the `configure` hook generates: use `boolean`
+  for on/off flags that accept only `true`/`false`, `enum` with `allowed_values` for a fixed
+  set of values, and `string` only for free-form text. `restart_required` is `true` when a
+  running daemon reads the option only at startup, so the hook must restart it
 - `notes`: include classic-confinement store-review warning if applicable; include any
   assumption that snapcraft-author cannot verify without reading the source
 - `target_arch`: `null` means build for the host architecture (the default — leave it `null`
   unless a non-host architecture was explicitly requested). When the caller
   (`snap-builder`'s Phase 0.1a) provides a target architecture, or the user names one
   directly, record it as one of `amd64`/`arm64`/`armhf`/`i386`/`ppc64el`/`s390x`/`riscv64`
-  and set `schema_version` to `"1.2"` — otherwise leave `schema_version` at `"1.0"`
+- `schema_version`: always `"1.3"`, whichever optional fields are populated
+
+Before reporting, check: if `config_options` is non-empty, `hooks` contains `configure`.
 
 ---
 
@@ -238,6 +267,7 @@ user and the `snapcraft-author` skill know where it is):
 - **Confinement** chosen and why (especially if classic)
 - **Interfaces** listed — which auto-connect and which require `snap connect`
 - **Hooks** identified and why
+- **Snap options** — each key with its type and default
 - **Layouts** required and why
 - Any open questions or assumptions recorded in `notes`
 

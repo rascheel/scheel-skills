@@ -84,7 +84,7 @@ When two or more snaps must share a writable directory, the skill SHALL record p
 - **THEN** `oci.content_interfaces` is empty
 
 ### Requirement: OCI analysis shape
-The analysis SHALL have `schema_version: "1.1"`, `snap.base` equal to the `docker-to-snap` scaffold's `base:`, `snap.confinement: strict`, and `build.plugin: dump` with a local `rootfs/` source. `oci.reproducibility_baseline` MUST always be populated with the tarball path and the exact extraction command so the validator can replay extraction. Classic confinement MUST NOT be chosen unless the user insists, and then only through `snap-analyzer`'s classic warning flow.
+The analysis SHALL have `schema_version: "1.3"`, `snap.base` equal to the `docker-to-snap` scaffold's `base:`, `snap.confinement: strict`, and `build.plugin: dump` with a local `rootfs/` source. Snap options SHALL go only in `oci.config_options[]`. `oci.reproducibility_baseline` MUST always hold the tarball path and exact extraction command. Classic confinement MUST NOT be chosen unless the user insists, and then only via `snap-analyzer`'s classic warning flow.
 
 #### Scenario: Scaffold uses core26
 - **WHEN** the `docker-to-snap` scaffold declares `base: core26`
@@ -93,6 +93,10 @@ The analysis SHALL have `schema_version: "1.1"`, `snap.base` equal to the `docke
 #### Scenario: Analysis written after a tarball extraction
 - **WHEN** the image was extracted from a tarball
 - **THEN** `oci.reproducibility_baseline` records that tarball path and the exact `docker-to-snap` command used
+
+#### Scenario: Current schema version
+- **WHEN** the analysis is written
+- **THEN** its `schema_version` is `"1.3"` and it has no top-level `config_options`
 
 ### Requirement: Chat report
 After writing the analysis, the skill SHALL report the full `/tmp` path, input type, target architecture, command path, interfaces (auto-connected and manual), counts and kinds of overrides, content interfaces, config options, non-root-user and glibc facts, and unmappable paths.

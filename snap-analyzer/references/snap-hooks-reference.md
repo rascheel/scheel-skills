@@ -48,18 +48,33 @@ if [ ! -f "$SNAP_DATA/config/settings.yaml" ]; then
     cp $SNAP/etc/my-app/settings.yaml.default $SNAP_DATA/config/settings.yaml
 fi
 
-# Set default snap options (readable via snapctl get in configure hook)
-snapctl set port=8080
-snapctl set log-level=info
+# Seed default snap options, only when unset so a reinstall keeps user choices.
+# Any snap option means the snap also needs a configure hook.
+[ -n "$(snapctl get port)" ] || snapctl set port=8080
+[ -n "$(snapctl get log-level)" ] || snapctl set log-level=info
 ```
 
 ---
 
 ## Hook: configure
 
-**When to add:** The app supports runtime configuration via `snap set my-app key=value`. This hook responds to those changes by updating config files or restarting services.
+**When to add:** The snap has **any** snap option — a key users change with
+`snap set my-app key=value`, or a key a hook or the app reads with `snapctl get`.
 
-**When NOT to add:** The app has no user-configurable options.
+**Required, not optional:** snapd rejects every `snap set` on a snap that has no
+`configure` hook (`snap "my-app" has no "configure" hook`). This holds even when the app
+reads the option itself and the hook has nothing to write.
+
+**When NOT to add:** The snap has no snap options.
+
+Rules for every `configure` hook:
+- Validate a value only when it is non-empty, so an unset key never makes `snap set` fail.
+  snapd also runs `configure` during installation, right after the `install` hook.
+- Restart a daemon only when it is running. During installation services haven't started
+  yet, so guard the restart with `snapctl services`.
+- Restart only for options a running daemon reads at startup.
+
+### Pattern A: the hook writes a config file the app reads
 
 ```bash
 #!/bin/bash
@@ -68,20 +83,49 @@ set -e
 PORT=$(snapctl get port)
 LOG_LEVEL=$(snapctl get log-level)
 
-# Validate
-if [ -z "$PORT" ]; then
-    echo "port is required" >&2
+# Validate (only when set)
+if [ -n "$PORT" ] && ! { [ "$PORT" -ge 1 ] 2>/dev/null && [ "$PORT" -le 65535 ]; }; then
+    echo "port must be an integer between 1 and 65535, got '$PORT'" >&2
     exit 1
 fi
 
 # Write config file the app reads
-cat > $SNAP_DATA/config/settings.yaml <<EOF
-port: $PORT
-log_level: $LOG_LEVEL
+cat > $SNAP_COMMON/settings.yaml <<EOF
+port: ${PORT:-8080}
+log_level: ${LOG_LEVEL:-info}
 EOF
 
-# Restart service to pick up new config
-snapctl restart my-app.my-daemon 2>/dev/null || true
+# Restart the daemon to pick up the new config, only if it is running
+if snapctl services "$SNAP_INSTANCE_NAME.my-daemon" | awk 'NR>1 {print $3}' | grep -qx active; then
+    snapctl restart "$SNAP_INSTANCE_NAME.my-daemon"
+fi
+```
+
+### Pattern B: the app reads `snapctl get` itself
+
+When the app or its wrapper calls `snapctl get` directly, the hook writes no config file.
+It must still exist so `snap set` succeeds, and it validates and restarts:
+
+```bash
+#!/bin/bash
+set -e
+
+DEBUG=$(snapctl get debug)
+LOG_LEVEL=$(snapctl get log.level)
+
+case "$DEBUG" in
+    ""|true|false) ;;
+    *) echo "debug must be 'true' or 'false', got '$DEBUG'" >&2; exit 1 ;;
+esac
+case "$LOG_LEVEL" in
+    ""|info|debug) ;;
+    *) echo "log.level must be one of: info, debug; got '$LOG_LEVEL'" >&2; exit 1 ;;
+esac
+
+# The daemon reads these options only at startup: restart it if it is running
+if snapctl services "$SNAP_INSTANCE_NAME.my-daemon" | awk 'NR>1 {print $3}' | grep -qx active; then
+    snapctl restart "$SNAP_INSTANCE_NAME.my-daemon"
+fi
 ```
 
 ---
@@ -187,6 +231,7 @@ snapctl set port=9090
 snapctl set log-level=debug
 
 # Service management from within a hook
+snapctl services my-app.my-daemon   # → Service / Startup / Current (active|inactive)
 snapctl start my-app.my-daemon
 snapctl stop my-app.my-daemon
 snapctl restart my-app.my-daemon

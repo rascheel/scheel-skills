@@ -2,11 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://canonical.com/snap-builder/snap-validation-results.schema.json",
   "title": "snap-validation-results.json",
-  "description": "Report written by snap-validator and consumed by snapcraft-author (patch mode) and snap-builder. Schema 1.1 is additive over 1.0: the OCI fields are optional and default to null/empty in the source-code case.",
+  "description": "Report written by snap-validator and consumed by snapcraft-author (patch mode) and snap-builder. Schema 1.1 is additive over 1.0: the OCI fields are optional and default to null/empty in the source-code case. Schema 1.2 is additive over 1.1: adds the optional 'config_check' object recording whether 'snap set' works, and widens 'diagnostics' to every non-denial failure (including 'config-set-failed'). Producers always write the current version.",
   "type": "object",
   "required": ["schema_version", "snap_name", "confinement", "clean", "denials"],
   "properties": {
-    "schema_version": { "enum": ["1.0", "1.1"] },
+    "schema_version": { "enum": ["1.0", "1.1", "1.2"] },
     "snap_name": { "type": "string" },
     "confinement": { "type": "string" },
     "clean": { "type": "boolean" },
@@ -24,6 +24,7 @@
     },
     "diagnostics": {
       "type": "array",
+      "description": "Failures that are not confinement denials, found before the snap runs (for example 'missing-snap') or while exercising it (for example 'config-set-failed'). Any entry makes 'clean' false.",
       "items": {
         "type": "object",
         "required": ["code", "message"],
@@ -73,6 +74,20 @@
           }
         },
         "clean": { "type": "boolean" }
+      }
+    },
+    "config_check": {
+      "type": ["object", "null"],
+      "description": "Schema 1.2: outcome of the snap option check. Null when the snap has no snap options and no configure hook. 'value_changed' is true when an enum option was set to another allowed value (exercising validation and restart) and false when the current value was re-applied (proving the configure hook exists and accepts a valid value).",
+      "required": ["checked"],
+      "properties": {
+        "checked": { "type": "boolean" },
+        "key": { "type": ["string", "null"] },
+        "value": {},
+        "value_changed": { "type": ["boolean", "null"] },
+        "set_ok": { "type": ["boolean", "null"] },
+        "daemons_active": { "type": ["boolean", "null"] },
+        "notes": { "type": "array", "items": { "type": "string" } }
       }
     }
   }

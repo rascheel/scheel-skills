@@ -1,8 +1,18 @@
 #!/bin/bash
-# snap/hooks/configure — Template for OCI-derived snaps
+# snap/hooks/configure — Template for snaps with snap options (OCI and source builds)
 #
 # This hook runs every time the operator calls:
 #   snap set <snap-name> <key>=<value>
+# and once during installation, right after the install hook.
+#
+# Any snap with snap options MUST ship this hook: snapd rejects every `snap set`
+# on a snap without one ("snap has no 'configure' hook").
+#
+# Two variants:
+#   - The hook writes a config file the app reads (OCI options, or source options
+#     with source config_file/env_var/cli_flag): use sections 1–5.
+#   - The app reads `snapctl get` itself (source options with source "snapctl"):
+#     use sections 1, 2 and 5 only; delete sections 3 and 4 — no config file.
 #
 # Replace all <PLACEHOLDERS> before use.
 # Make executable: chmod +x snap/hooks/configure
@@ -17,6 +27,7 @@ set -e
 port=$(snapctl get port)
 log_level=$(snapctl get log-level)
 # workers=$(snapctl get workers)
+# debug=$(snapctl get debug)
 # tls_cert_file=$(snapctl get tls.cert-file)
 # tls_key_file=$(snapctl get tls.key-file)
 
@@ -44,6 +55,17 @@ if [ -n "$log_level" ]; then
     esac
 fi
 
+# -- debug: boolean true/false  (uncomment if used)
+# if [ -n "$debug" ]; then
+#     case "$debug" in
+#         true|false) ;;
+#         *)
+#             echo "ERROR: 'debug' must be 'true' or 'false' (got: '$debug')" >&2
+#             exit 1
+#             ;;
+#     esac
+# fi
+
 # -- workers: positive integer  (uncomment if used)
 # if [ -n "$workers" ]; then
 #     if ! echo "$workers" | grep -qE '^[1-9][0-9]*$'; then
@@ -59,6 +81,7 @@ fi
 # fi
 
 # ─── 3. APPLY DEFAULTS FOR UNSET KEYS ────────────────────────────────────────
+# (Config-file variant only — delete when the app reads `snapctl get` itself.)
 # Fall back to the application's built-in defaults so the generated config file
 # always has all keys populated.
 
@@ -69,6 +92,7 @@ log_level="${log_level:-info}"  # <-- replace with application default
 # tls_key_file="${tls_key_file:-}"
 
 # ─── 4. WRITE CONFIG FILE TO $SNAP_COMMON ─────────────────────────────────────
+# (Config-file variant only — delete when the app reads `snapctl get` itself.)
 # Choose ONE of the blocks below matching your application's config format.
 # Delete the others.
 
@@ -111,7 +135,14 @@ EOF
 # EOF
 
 # ─── 5. RESTART SERVICE (DAEMON SNAPS ONLY) ───────────────────────────────────
-# Remove this block for run-to-completion (non-daemon) snaps.
-# If omitted for a daemon snap, new config takes effect only after manual restart.
+# Remove this block for run-to-completion (non-daemon) snaps, and when no changed
+# option needs a restart (the daemon re-reads it, or reads it per request).
+# If omitted for a daemon that reads options only at startup, new values take
+# effect only after a manual restart.
 #
-# snapctl restart <snap-name>.<app-name>
+# Restart only when the daemon is running: during installation this hook runs
+# before services start.
+#
+# if snapctl services "$SNAP_INSTANCE_NAME.<app-name>" | awk 'NR>1 {print $3}' | grep -qx active; then
+#     snapctl restart "$SNAP_INSTANCE_NAME.<app-name>"
+# fi

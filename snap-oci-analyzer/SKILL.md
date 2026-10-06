@@ -16,8 +16,8 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.0.2"
-  summary: "Analyzes OCI/Docker container input and writes snap-analysis.json (schema 1.1, with an oci block) — the packaging spec consumed by snapcraft-author."
+  version: "1.0.3"
+  summary: "Analyzes OCI/Docker container input and writes snap-analysis.json (schema 1.3, with an oci block) — the packaging spec consumed by snapcraft-author."
   tags:
     - snap
     - snapcraft
@@ -432,7 +432,9 @@ snapcraft-author from these facts.
 
 Write to `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`), **not** the
 project root. Reuse the existing schema fields exactly as `snap-analyzer` does, and add
-the new optional top-level `oci` block. Set `schema_version` to `"1.1"`.
+the optional top-level `oci` block. Set `schema_version` to `"1.3"`, the current
+analysis version. Record snap options only in `oci.config_options[]`; never write the
+top-level `config_options[]`, which is for source builds.
 
 **Reused fields, OCI specifics:**
 - `snap.base` = the scaffold's `base:` recorded in Phase 0d (currently `"core26"`) —
@@ -445,8 +447,10 @@ the new optional top-level `oci` block. Set `schema_version` to `"1.1"`.
   or a `usr/bin/` path per Phase 1c).
 - `apps[].daemon` → `null` for run-to-completion apps, `"simple"`/`"forking"` for daemons,
   per the Phase 0c classification.
-- `hooks[]` → include `install`/`configure` when Phase 4c yields config options or the
-  generator produced an `/etc/hosts` install hook.
+- `hooks[]` → include `configure` whenever Phase 4c yields any config option (snapd rejects
+  `snap set` on a snap without a `configure` hook, and the contract schema rejects the
+  analysis), and `install` when it yields options or the generator produced an
+  `/etc/hosts` install hook.
 - `interfaces[]`, `layouts{}`, `notes[]` → as gathered in Phases 2–4.
 
 Use `references/analysis-output-contract.md` as the JSON shape template. The checked-in

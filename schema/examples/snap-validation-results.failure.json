@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "snap_name": "hello-cli",
   "confinement": "strict",
   "clean": false,
@@ -16,5 +16,6 @@
   "target_arch": null,
   "test_environment_used": null,
   "store_review_interfaces": [],
-  "reproducibility": null
+  "reproducibility": null,
+  "config_check": null
 }

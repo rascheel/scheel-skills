@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "snap_name": "nginx",
   "confinement": "strict",
   "clean": true,
@@ -17,5 +17,14 @@
       { "path": "etc/nginx/nginx.conf", "kind": "modified", "detail": "listen port rewritten" }
     ],
     "clean": false
+  },
+  "config_check": {
+    "checked": true,
+    "key": "port",
+    "value": "8080",
+    "value_changed": false,
+    "set_ok": true,
+    "daemons_active": true,
+    "notes": ["Re-applied the current value; no enum option to change."]
   }
 }

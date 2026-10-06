@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.2",
+  "snap_name": "simple-server",
+  "confinement": "strict",
+  "clean": false,
+  "denials": [],
+  "diagnostics": [
+    {
+      "code": "config-set-failed",
+      "message": "snap set simple-server log.level=debug failed: error: cannot perform the following tasks:\n- Run configure hook of \"simple-server\" snap (snap \"simple-server\" has no \"configure\" hook)"
+    }
+  ],
+  "oci_mode": false,
+  "devmode_pass": true,
+  "devmode_notes": [],
+  "target_arch": null,
+  "test_environment_used": null,
+  "store_review_interfaces": [],
+  "reproducibility": null,
+  "config_check": {
+    "checked": true,
+    "key": "log.level",
+    "value": "debug",
+    "value_changed": true,
+    "set_ok": false,
+    "daemons_active": null,
+    "notes": []
+  }
+}

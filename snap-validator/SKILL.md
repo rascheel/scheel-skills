@@ -7,7 +7,7 @@ description: >
   snapcraft-author to act on — never patches snapcraft.yaml directly. Hard-stops for classic
   confinement. Runs a devmode-first crash check, flags store-review-only interfaces, and
   selects an arch-appropriate test environment for any cross-architecture build (OCI or
-  general). Also reports OCI rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
+  general). Checks snap set. Also reports OCI rootfs reproducibility diffs — all report-only. WHEN: validate snap interfaces,
   test snap in LXD, snap AppArmor denials, snap security testing, find snap plugs, snap
   confinement issues, snappy-debug scan, snap runtime testing, snap permissions audit,
   snapcraft.yaml interfaces, snap seccomp denial, snap access denied, devmode crash check,
@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.4.1"
+  version: "1.5.0"
   summary: "Runs a snap in LXD: reports denials, devmode, store-review interfaces, and arch-aware test env; OCI reproducibility — never patches yaml."
   tags:
     - snap
@@ -41,7 +41,8 @@ plugs that are actually required. Classic-confinement snaps are excluded.
 scan (§2.5) and a **store-review-only interface cross-check** during the strict scan
 (§3.4) — neither has any real OCI dependency; a build/exec correctness bug or a
 store-review-only interface need can arise for a source-built snap just as much as an
-OCI-derived one.
+OCI-derived one. A snap with snap options also gets a **snap option check** (§3.6) after
+the strict scan.
 
 **OCI mode.** For OCI-derived snaps the base flow is additionally wrapped with extra
 behaviors — **architecture-aware environment selection** during the strict scan (§2.0),
@@ -74,6 +75,11 @@ arch-selection phase (§2.0). When OCI mode is true, also read `oci.reproducibil
 (store-review) run regardless of OCI mode. When there is no effective target architecture
 (host-arch build, either mode), skip §2.0's cross-arch handling and leave `target_arch`/
 `test_environment_used` at their null defaults (§4.2); always skip §3.5 outside OCI mode.
+
+In either mode, also read the snap options the analysis records: top-level
+`config_options[]` (source builds) and `oci.config_options[]` (OCI builds). §3.6 uses them.
+Also note whether the manifest declares a `configure` hook (a `snap/hooks/configure` file,
+or `configure` under `hooks:` in `snapcraft.yaml`).
 
 ### 1.2 Classic confinement gate
 
@@ -228,6 +234,64 @@ app needs it). See `references/install-and-verify.md` → "Identify store-review
 interfaces early". These are reported, not blocking — they inform the user of extra Store
 review time.
 
+### 3.6 Snap option check
+
+Runs for every snap, OCI or source-built, after the strict scan and while its daemons are
+running. (§3.5 is the OCI reproducibility phase, described after Step 4.) It proves that
+`snap set` works: snapd rejects every `snap set` on a snap without a `configure` hook,
+and a strict scan never runs `snap set`, so it cannot catch this.
+
+**When to run:**
+- The analysis records at least one snap option (§1.1a): run the check below.
+- The manifest has a `configure` hook but the analysis records no option: don't run
+  `snap set`. Write `config_check` with `checked: false` and the reason in `notes`, for
+  example `"configure hook present but the analysis records no snap option"`. This does
+  not affect `clean`.
+- No options and no `configure` hook: skip the check and leave `config_check: null`.
+
+**Choose the option and the value:**
+1. If an `enum` option has another value in `allowed_values` besides its current one, use
+   it: set that other value, then restore the original. Record `value_changed: true`.
+2. Otherwise re-apply one option's current value, whatever its type (port, integer,
+   boolean, path or string). Prefer an option with `restart_required: true`, so the
+   hook's restart path runs. Record `value_changed: false`. Never set any of these types
+   to a different value: the validator cannot know which other values are safe.
+
+Read the current value with `snap get`. A non-zero exit or empty output means the key is
+unset. Re-applying an unset key means `snap unset`, which also runs the `configure` hook.
+
+```bash
+SNAP=<snap-name>; KEY=<key>
+CUR=$(lxc exec snap-test-env -- snap get "$SNAP" "$KEY" 2>/dev/null) || CUR=""
+
+# Enum option with another allowed value <other>: change, check daemons, restore
+lxc exec snap-test-env -- snap set "$SNAP" "$KEY=<other>"
+#   ... check daemons (below) ...
+lxc exec snap-test-env -- snap set "$SNAP" "$KEY=$CUR"   # or: snap unset "$SNAP" "$KEY" if CUR was empty
+
+# Any other option: re-apply the current value
+if [ -n "$CUR" ]; then
+    lxc exec snap-test-env -- snap set "$SNAP" "$KEY=$CUR"
+else
+    lxc exec snap-test-env -- snap unset "$SNAP" "$KEY"
+fi
+```
+
+**Check the result:**
+- **Exit status.** Every `snap set`/`snap unset` must exit `0`. On failure, set
+  `set_ok: false`, leave `daemons_active: null`, and add a diagnostic:
+  `{"code": "config-set-failed", "message": "<the command and snapd's full error>"}`.
+  Stop the check there and don't try the restore step.
+- **Daemons.** After each successful `snap set` (wait about 5 s for a restart to finish),
+  every daemon in `snap services <snap-name>` must still be `active`. Record
+  `daemons_active: true` or `false`; on `false`, note which daemon stopped in `notes` and
+  add its `journalctl -u snap.<snap-name>.<app-name>` tail.
+- **Denials.** Re-collect AppArmor/SecComp lines as in §3.2. Add any new denial to
+  `denials[]` (Step 3.3), with the app that triggered it.
+
+Record `key` and `value` (the value that was set; for an enum, the other value; `null`
+when the key was unset and `snap unset` ran).
+
 ---
 
 ## Step 4: Write Results
@@ -238,13 +302,14 @@ Identify which `apps:` entry in `snapcraft.yaml` caused each denial.
 
 ### 4.2 Write snap-validation-results.json
 
-Write `snap-validation-results.json` to the project root using this schema (bumped to
-`"1.1"`). All base fields are unchanged; the OCI fields are optional and take their
-null/empty defaults in the base case, so schema-1.0 consumers keep working:
+Write `snap-validation-results.json` to the project root using this schema. Always write
+the current version, `"1.2"`. All base fields are unchanged; the OCI fields and
+`config_check` are optional and take their null/empty defaults in the base case, so older
+consumers keep working:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "snap_name": "<name>",
   "confinement": "<confinement>",
   "clean": false,
@@ -263,16 +328,27 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
   "target_arch": null,
   "test_environment_used": null,
   "store_review_interfaces": [],
-  "reproducibility": null
+  "reproducibility": null,
+
+  "config_check": {
+    "checked": true,
+    "key": "<key>",
+    "value": "<value set, or null after snap unset>",
+    "value_changed": false,
+    "set_ok": true,
+    "daemons_active": true,
+    "notes": []
+  }
 }
 ```
 
-- Set `"clean": true` and `"denials": []` when no denials were found.
+- Set `"clean": true` only when `denials[]` and `diagnostics[]` are both empty.
 - Set `"interface_suggestion"` to the plug name from snappy-debug, or look up the denial
   in `references/denial-to-interface.md` if snappy-debug gives no suggestion.
 - Write one denial object per unique `(app, interface_suggestion)` pair — deduplicate.
-- Use `diagnostics[]` for validation failures that are not confinement denials, such as
-  a missing `.snap` artifact. Each entry has a machine-readable `code` and a human-readable
+- Use `diagnostics[]` for every failure that is not a confinement denial, such as a
+  missing `.snap` artifact (`missing-snap`) or a rejected `snap set` (`config-set-failed`,
+  §3.6). Each entry has a machine-readable `code` and a human-readable
   `message`; keep `denials[]` exclusively for valid denial objects.
 - **`devmode_pass`/`devmode_notes[]`** are populated from Step 2.5 for every run, OCI or
   source-built — `devmode_pass` is `true`/`false`.
@@ -282,6 +358,8 @@ null/empty defaults in the base case, so schema-1.0 consumers keep working:
 - **`target_arch`/`test_environment_used`** come from Step 2.0's effective target
   architecture (§1.1a) — `oci.target_arch` in OCI mode, or the general-path `target_arch` —
   and stay `null` when there is no effective target architecture at all.
+- **`config_check`** comes from Step 3.6 for every run, OCI or source-built. It is `null`
+  only when the snap has no snap options and no `configure` hook.
 - **OCI-only fields:** set `oci_mode: true` in OCI mode. `reproducibility` is populated
   only by Step 3.5 (below), otherwise `null`.
 - When `devmode_pass: false`, write the results and stop after Step 2.5 — `clean` reflects
@@ -337,7 +415,8 @@ override steps) and loops back; this skill's role ends at reporting the diff.
 ### 5.1 Confirm clean run
 
 A clean run is when all apps and daemons finish without producing any AppArmor/SecComp
-denials. `snap-validation-results.json` will have `"clean": true`.
+denials, and no diagnostic was recorded (including a failed snap option check).
+`snap-validation-results.json` will have `"clean": true`.
 
 ### 5.2 Present summary table
 
@@ -346,7 +425,9 @@ denials. `snap-validation-results.json` will have `"clean": true`.
 | `<app-name>` | `<denial or "None">` | `<plug(s) or "None">` |
 
 Always report devmode pass/fail (with any ELF-crash note) and store-review-only interfaces
-required. In OCI mode, also report: the test environment used and reproducibility status
+required. When `config_check` is non-null, report the snap option check: the key, the
+value set, whether it was changed (enum) or re-applied, and whether `snap set` succeeded
+and daemons stayed active, or why the check did not run. In OCI mode, also report: the test environment used and reproducibility status
 (clean / N diffs).
 
 ### 5.3 Cleanup — always execute
@@ -371,6 +452,8 @@ lxc delete --force snap-test-env
 | `cloud-init` times out | Wait 60 s and retry; if still failing, recreate container |
 | Devmode start fails | Set `devmode_pass: false` + `devmode_notes[]`; stop before strict scan; caller runs the build-fix branch |
 | Target arch ≠ host (OCI or general path) | Select an environment per `references/build-environments.md`; record `test_environment_used` |
+| `snap set`/`snap unset` fails in §3.6 | Add a `config-set-failed` diagnostic with snapd's error; set `config_check.set_ok: false` and `clean: false`; skip the restore step |
+| Configure hook present, no snap option recorded | Set `config_check.checked: false` with the reason in `notes`; do not fail the run |
 | Original image not reproducible (OCI) | Set `reproducibility.checked: false`; note the reason; do not fail the run |
 
 ---

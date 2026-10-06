@@ -15,7 +15,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "2.0.0"
+  version: "2.1.0"
   summary: "End-to-end snap pipeline for source or OCI input: delegates analysis, packaging, validation, and iterative patching to focused sub-agents."
   tags:
     - snap
@@ -39,15 +39,15 @@ when its phase is done. This skill manages control flow and the patch loop.
 The sub-agents communicate exclusively through these files. `snap-analysis.json` is a
 transient hand-off artifact and lives under `/tmp` (project-scoped:
 `/tmp/snap-analysis-$(basename "$PWD").json`); the rest live in the project root.
-`snap-analysis.json` is at schema **`1.2`**; `snap-validation-results.json` is at schema
-**`1.1`** — both additive over their prior versions (new optional fields only), so an older
-producer/consumer still interoperates.
+`snap-analysis.json` is at schema **`1.3`**; `snap-validation-results.json` is at schema
+**`1.2`** — both additive over their prior versions (new optional fields only), so an older
+producer/consumer still interoperates. Producers always write the current version.
 
 | File | Written by | Read by | Purpose |
 |---|---|---|---|
-| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snapcraft-author, snap-validator | Full packaging specification (transient); an `oci` key marks container input, a top-level `target_arch` marks a non-host source build |
+| `/tmp/snap-analysis-<dir>.json` | snap-analyzer **or** snap-oci-analyzer | snapcraft-author, snap-validator | Full packaging specification (transient); an `oci` key marks container input, a top-level `target_arch` marks a non-host source build; snap options are in `config_options[]` (source) or `oci.config_options[]` (OCI) |
 | `snap/snapcraft.yaml` | snapcraft-author | snap-validator, snapcraft-author (patch) | Snap manifest (snapcraft-author is the sole writer) |
-| `snap-validation-results.json` | snap-validator | snapcraft-author (patch), snap-builder | Denial report + diagnostics + devmode / store-review findings (every run) + (OCI) reproducibility findings |
+| `snap-validation-results.json` | snap-validator | snapcraft-author (patch), snap-builder | Denial report + diagnostics + devmode / store-review findings and snap option check (`config_check`) (every run) + (OCI) reproducibility findings |
 
 > **Input type.** Exactly one analyzer runs per pipeline: `snap-analyzer` for source-code
 > projects, `snap-oci-analyzer` for OCI/container input (Docker Hub URL, image reference,
@@ -200,10 +200,11 @@ Provide this context to the sub-agent:
 - The `.snap` file in the project root is the target
 - `snap/snapcraft.yaml` is available for reference
 - **`$ANALYSIS_FILE` is available** (`/tmp/snap-analysis-$(basename "$PWD").json`) — pass it
-  so the validator can detect OCI mode (its `oci` key) and read `oci.target_arch` /
-  `oci.reproducibility_baseline`
+  so the validator can detect OCI mode (its `oci` key), read `oci.target_arch` /
+  `oci.reproducibility_baseline`, and read the snap options to check
 - Goal: run all apps and daemons in a clean LXD container, capture any AppArmor/SecComp
-  denials, and write `snap-validation-results.json`
+  denials, check that `snap set` works when the snap has snap options, and write
+  `snap-validation-results.json`
 
 Wait until `snap-validation-results.json` is present before continuing.
 
@@ -211,8 +212,12 @@ Wait until `snap-validation-results.json` is present before continuing.
 
 Read `snap-validation-results.json`, and branch on the *kind* of result:
 
-1. **`diagnostics[]` is non-empty** → stop and report the diagnostics. These are validation
-   pre-flight failures (for example, a missing `.snap`), not denial-patch candidates.
+1. **`diagnostics[]` is non-empty** → stop and report the diagnostics. These are non-denial
+   failures, not denial-patch candidates: found before the snap runs (for example, a missing
+   `.snap`) or while exercising it. A `config-set-failed` diagnostic means snapd rejected
+   `snap set`, usually because the snap has no `configure` hook; show snapd's error and
+   don't send it to patch mode. The fix is to re-run analysis and packaging so the hook is
+   generated.
 2. **`devmode_pass == false`** → this is a **build-correctness** failure, not a
    denial — can arise for any snap, OCI or source-built. If the devmode build-fix counter
    < 3, delegate to `snapcraft-author`'s **build-fix branch** (Step 2b case (c) — consumes
@@ -283,6 +288,7 @@ Present a consolidated summary to the user.
 | Devmode | ✅ pass / ⚠️ failed after 3 build-fix attempts |
 | Store-review-only interfaces | list from `store_review_interfaces[]`, or `None` |
 | Reproducibility | ✅ clean / ⚠️ N unresolved diffs after 3 iterations / `—` (non-OCI) |
+| Snap option check | ✅ `<key>` changed to `<value>` / ✅ `<key>` re-applied / ⚠️ not run: `<reason>` / ❌ failed / `—` (no snap options) |
 | Final status | ✅ Clean — no denials / ⚠️ Unresolved denials after 5 iterations |
 
 ### Files Produced
@@ -300,6 +306,20 @@ Present a consolidated summary to the user.
 
 List every interface from `$ANALYSIS_FILE` where `"auto_connected": false`, with the
 exact `snap connect <snap-name>:<plug> :<interface>` command for each.
+
+### Snap Options (if any)
+
+List every snap option from `config_options[]` (source) or `oci.config_options[]` (OCI),
+with its default and a `snap set` example, for example
+`sudo snap set <snap-name> <key>=<value>`. Then state the result of the validator's option
+check from `config_check`:
+
+- `checked: true`, `set_ok: true` and `daemons_active: true` → the check passed. Say
+  whether it changed a value (`value_changed: true`, an enum) or re-applied the current
+  one. Only in this case describe the snap as configurable with `snap set`.
+- `checked: false` → the keys were not tested; give the reason from `notes`.
+- `set_ok: false` or `daemons_active: false` → the check failed; show the diagnostic or
+  notes.
 
 ### Store-Review-Only Interfaces (if any)
 
@@ -339,7 +359,7 @@ If the Phase 3.5 reproducibility loop hit its 3-iteration cap, list the remainin
 | Devmode build-fix loop exhausted (3 attempts) | Exit to Phase 4; report the devmode failure and `devmode_notes[]` separately from denials |
 | Reproducibility loop exhausted (3 iterations, OCI) | Exit to Phase 4; list unresolved diffs in the "Unresolved Reproducibility Diffs" section |
 | snap-validator fails to write results | Stop; show the error; suggest running it standalone |
-| Validator reports diagnostics | Stop; show each diagnostic; fix the reported pre-flight failure before rerunning validation |
+| Validator reports diagnostics | Stop; show each diagnostic; fix the reported failure before rerunning validation (for `config-set-failed`, make sure the analysis lists `configure` and re-run packaging) |
 | LXD container creation fails | Let snap-validator handle the retry logic |
 | Classic confinement confirmed after Phase 1 | Skip Phase 3; proceed to the Final Report (Phase 4); remind user of Store approval requirement and Ubuntu Core incompatibility |
 | `.snap` file missing after snapcraft-author runs | Stop; show the last build output |

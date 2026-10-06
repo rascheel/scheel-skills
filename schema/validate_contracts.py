@@ -2,13 +2,16 @@
 """
 validate_contracts.py — LXD-free contract gate for the snap-builder pipeline.
 
-Validates snap-analysis.json and snap-validation-results.json against the documented
-schema 1.0 through 1.2 shapes. It is the living definition of the "additive, optional-field" promise
+Validates snap-analysis.json (schema 1.0 through 1.3) and snap-validation-results.json
+(schema 1.0 through 1.2) against the documented shapes. It is the living definition of the "additive, optional-field" promise
 between snap-analyzer / snap-oci-analyzer, snapcraft-author, and snap-validator.
 
 Usage:
-    # Validate the bundled examples (OCI-populated and source-case):
+    # Validate the bundled examples, and confirm the invalid ones are rejected:
     python3 validate_contracts.py --self-test
+
+    # Same, forcing the built-in checker even when jsonschema is installed:
+    python3 validate_contracts.py --self-test --fallback
 
     # Validate real pipeline artifacts:
     python3 validate_contracts.py \
@@ -44,7 +47,8 @@ def _validate_with_jsonschema(instance, schema):
 
 
 def _fallback_check(instance, schema, path="$"):
-    """Minimal draft-07 subset: required, type, enum, if/then, nested properties/items.
+    """Minimal draft-07 subset: required, type, enum, const, if/then, allOf, nested
+    properties/items, contains and minItems.
 
     Not a full validator — it catches the structural breakages this gate cares about
     (missing required keys, wrong scalar types, bad enum values) without a dependency.
@@ -74,6 +78,11 @@ def _fallback_check(instance, schema, path="$"):
     if "enum" in schema and instance not in schema["enum"]:
         errors.append(f"{path}: {instance!r} not in enum {schema['enum']}")
 
+    if "const" in schema and not (
+        instance == schema["const"] and type(instance) is type(schema["const"])
+    ):
+        errors.append(f"{path}: expected {schema['const']!r}, got {instance!r}")
+
     if isinstance(instance, dict):
         for req in schema.get("required", []):
             if req not in instance:
@@ -86,24 +95,46 @@ def _fallback_check(instance, schema, path="$"):
     if "if" in schema and "then" in schema and not _fallback_check(instance, schema["if"], path):
         errors += _fallback_check(instance, schema["then"], path)
 
-    if isinstance(instance, list) and "items" in schema:
-        for i, item in enumerate(instance):
-            errors += _fallback_check(item, schema["items"], f"{path}[{i}]")
+    for i, subschema in enumerate(schema.get("allOf", [])):
+        errors += _fallback_check(instance, subschema, path)
+
+    if isinstance(instance, list):
+        if "items" in schema:
+            for i, item in enumerate(instance):
+                errors += _fallback_check(item, schema["items"], f"{path}[{i}]")
+        if "minItems" in schema and len(instance) < schema["minItems"]:
+            errors.append(f"{path}: expected at least {schema['minItems']} item(s), got {len(instance)}")
+        if "contains" in schema and not any(
+            not _fallback_check(item, schema["contains"]) for item in instance
+        ):
+            errors.append(f"{path}: no item matches {json.dumps(schema['contains'])}")
 
     return errors
 
 
-def validate(instance, schema, label):
-    try:
-        _validate_with_jsonschema(instance, schema)
-        engine = "jsonschema"
-        errors = []
-    except ImportError:
-        engine = "fallback"
-        errors = _fallback_check(instance, schema)
-    except Exception as exc:  # jsonschema.ValidationError and friends
-        engine = "jsonschema"
-        errors = [str(exc).splitlines()[0]]
+def _errors(instance, schema, force_fallback=False):
+    """Return (engine, errors) for one instance."""
+    if not force_fallback:
+        try:
+            _validate_with_jsonschema(instance, schema)
+            return "jsonschema", []
+        except ImportError:
+            pass
+        except Exception as exc:  # jsonschema.ValidationError and friends
+            return "jsonschema", [str(exc).splitlines()[0]]
+    return "fallback", _fallback_check(instance, schema)
+
+
+def validate(instance, schema, label, force_fallback=False, expect_valid=True):
+    engine, errors = _errors(instance, schema, force_fallback)
+
+    if not expect_valid:
+        if errors:
+            print(f"ok    {label}  ({engine}, rejected as expected: {errors[0]})")
+            return True
+        print(f"FAIL  {label}  ({engine})")
+        print("      - expected a validation error, but the instance was accepted")
+        return False
 
     if errors:
         print(f"FAIL  {label}  ({engine})")
@@ -119,6 +150,8 @@ def main():
     ap.add_argument("--analysis", metavar="PATH", help="snap-analysis.json to validate")
     ap.add_argument("--results", metavar="PATH", help="snap-validation-results.json to validate")
     ap.add_argument("--self-test", action="store_true", help="Validate the bundled examples")
+    ap.add_argument("--fallback", action="store_true",
+                    help="Use the built-in checker even when jsonschema is installed")
     args = ap.parse_args()
 
     if not (args.analysis or args.results or args.self_test):
@@ -137,19 +170,28 @@ def main():
 
     if args.self_test:
         ex = os.path.join(HERE, "examples")
+        bad = os.path.join(ex, "invalid")
         checks += [
-            (os.path.join(ex, "snap-analysis.oci.json"), analysis_schema, "analysis (oci)"),
-            (os.path.join(ex, "snap-analysis.source.json"), analysis_schema, "analysis (source)"),
-            (os.path.join(ex, "snap-validation-results.oci.json"), results_schema, "results (oci)"),
-            (os.path.join(ex, "snap-validation-results.source.json"), results_schema, "results (source)"),
-            (os.path.join(ex, "snap-validation-results.failure.json"), results_schema, "results (failure)"),
+            (os.path.join(ex, "snap-analysis.oci.json"), analysis_schema, "analysis (oci)", True),
+            (os.path.join(ex, "snap-analysis.source.json"), analysis_schema, "analysis (source)", True),
+            (os.path.join(ex, "snap-analysis.source-options.json"), analysis_schema,
+             "analysis (source, snap options)", True),
+            (os.path.join(ex, "snap-validation-results.oci.json"), results_schema, "results (oci)", True),
+            (os.path.join(ex, "snap-validation-results.source.json"), results_schema, "results (source)", True),
+            (os.path.join(ex, "snap-validation-results.failure.json"), results_schema, "results (failure)", True),
+            (os.path.join(ex, "snap-validation-results.config-failure.json"), results_schema,
+             "results (config-set-failed)", True),
+            (os.path.join(bad, "snap-analysis.source-options-no-configure.json"), analysis_schema,
+             "invalid analysis (source options, no configure hook)", False),
+            (os.path.join(bad, "snap-analysis.oci-options-no-configure.json"), analysis_schema,
+             "invalid analysis (oci options, no configure hook)", False),
         ]
     if args.analysis:
-        checks.append((args.analysis, analysis_schema, f"analysis ({args.analysis})"))
+        checks.append((args.analysis, analysis_schema, f"analysis ({args.analysis})", True))
     if args.results:
-        checks.append((args.results, results_schema, f"results ({args.results})"))
+        checks.append((args.results, results_schema, f"results ({args.results})", True))
 
-    for path, schema, label in checks:
+    for path, schema, label, expect_valid in checks:
         try:
             instance = _load(path)
         except OSError as exc:
@@ -160,7 +202,7 @@ def main():
             print(f"FAIL  {label}: invalid JSON — {exc}")
             all_ok = False
             continue
-        if not validate(instance, schema, label):
+        if not validate(instance, schema, label, args.fallback, expect_valid):
             all_ok = False
 
     return 0 if all_ok else 1
