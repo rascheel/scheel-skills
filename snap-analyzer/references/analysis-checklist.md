@@ -94,13 +94,42 @@ Answer these before choosing `strict` vs `classic`. Default to `strict` — only
 
 ## 4. Service / Daemon Detection
 
-- [ ] Systemd unit file (`*.service`) present in repo?
+### 4a. App type: command, service, or both
+
+Decide from how upstream expects the app to be run, not from how the README describes it.
+A "web server" or "file server" that users run on a directory they choose is a command.
+
+1. **Find upstream's main usage.** Check README usage examples, `--help`/usage text, man
+   pages and bundled unit files. Record it in `notes[]`, for example
+   `upstream usage: darkhttpd <wwwroot> [--port N]`.
+2. **Command app when each run takes user-chosen arguments.** If the main usage takes
+   arguments the user picks per run (a path to serve, input files, a port flag) and runs
+   in the foreground, ship a command app (`daemon: null`).
+   - Its command passes arguments through: the binary itself, or a wrapper ending in
+     `exec "$SNAP/<path>/<binary>" "$@"`.
+   - Don't hardcode a root directory, file or flag the user would normally choose.
+3. **Add a service app only for a real signal:**
+   - a bundled systemd unit (`*.service`) or init script;
+   - a documented service mode, such as `ollama serve`;
+   - a fixed config file the app reads at startup (for example `/etc/<app>/<app>.conf`);
+   - upstream docs saying it should start on boot.
+
+   Calling the app a "server" is not a signal by itself.
+4. **Both apply → ship both.** Name the command app after the binary and the service app
+   `daemon` (`snap.<snap>.daemon`). If upstream ships separate binaries for the two (for
+   example `foo` and `food`), name each app after its binary instead.
+5. **Service only → record why.** Allow it only when upstream is purely a service, for
+   example it takes no arguments and reads only its config or snap options. Say so in
+   `notes[]`.
+6. **Record the decision** and the signal behind it in `notes[]`, for example
+   `command app only: upstream runs it on a chosen directory and ships no unit file`.
+
+### 4b. Service details (service apps only)
+
 - [ ] Does the process stay in the foreground (`daemon: simple`) or fork and daemonize (`daemon: forking`)?
-- [ ] Does it have a `--daemon` / `--no-daemon` / `--foreground` flag?
-- [ ] README describes it as a server or background service?
-- [ ] Does it need to start on boot? → `daemon: simple` or `daemon: forking` in apps entry
+- [ ] Does it have a `--daemon` / `--no-daemon` / `--foreground` flag? (A `--daemon` flag means it *can* fork; it is not a signal to add a service.)
 - [ ] Does the app's default config need changes to run in a snap (for example absolute paths outside writable areas)? → The `install` hook seeds a corrected config to `$SNAP_COMMON`, and the daemon's wrapper or command points at it so the user can edit it freely after install. A port below 1024 needs changing only when the process is non-root when it binds (see the `network-bind` note in `snap-interfaces-catalog.md`); if you pick a different port anyway, for example to avoid clashing with a host service, record why in `notes[]`.
-- [ ] Does the app (or a wrapper or sourced helper) call `snapctl get`, or does the plan seed options with `snapctl set`? → Record each option in top-level `config_options[]` with its key, type (record `true`/`false` flags as `boolean`), default, and whether a running daemon must restart to pick up a change (`restart_required`). Any recorded option requires the `configure` hook; any non-null default requires the `install` hook.
+- [ ] Does the app (or a wrapper or sourced helper) call `snapctl get`, or does the plan seed options with `snapctl set`? Plan a `snapctl get` wrapper only for a service app that §4a justified, and record why in `notes[]`; never add snap options to give a plain command a fixed configuration. → Record each option in top-level `config_options[]` with its key, type (record `true`/`false` flags as `boolean`), default, and whether a running daemon must restart to pick up a change (`restart_required`). Any recorded option requires the `configure` hook; any non-null default requires the `install` hook.
 
 ---
 
@@ -130,6 +159,7 @@ Answer these before choosing `strict` vs `classic`. Default to `strict` — only
 
 - [ ] Reads from `$HOME` or user directories? → `home` plug
 - [ ] Reads/writes removable media (`/media`, `/mnt`, `/run/media`)? → `removable-media` plug
+- [ ] Declare `home` and `removable-media` only on apps that can actually reach those paths, typically a command app the user runs on a path they choose. A service with a fixed root under `$SNAP_COMMON` never needs them, and a root service's `home` reaches only `/root`.
 - [ ] Writes to `/etc/<appname>` (hardcoded path)? → use `layout` to remap to `$SNAP_DATA`
 - [ ] Writes to `/var/lib/<appname>` (hardcoded path)? → use `layout` to remap to `$SNAP_DATA`
 - [ ] Reads `/proc` or `/sys` for system info? → `system-observe` or `hardware-observe` plug

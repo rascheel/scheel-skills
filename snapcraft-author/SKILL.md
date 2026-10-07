@@ -16,7 +16,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "2.1.1"
+  version: "2.2.0"
   summary: "Reads snap-analysis.json and generates snapcraft.yaml, hooks, and a packaging guide, then builds the snap; renders OCI recipes when the analysis has an oci key."
   tags:
     - snap
@@ -396,7 +396,11 @@ After the build succeeds, summarize in the chat:
   identical rendering. Omit `platforms:` when `target_arch` is `null`.
 - General path: always set `base: core24`; do NOT set `build-base` (it is only valid with `base: bare`). OCI mode: preserve the scaffold's `base:` (currently `core26`) — never force core24
 - Never use `devmode` in generated files — it is a testing-only aid
-- If the app has multiple binaries or services, model each as a separate entry under `apps`
+- Render every entry in `apps[]` with the type the analysis records (`daemon:` only on
+  service apps); if it lists a command app and a service app, emit both
+- A wrapper script for a command app (`daemon: null`) must end in
+  `exec "$SNAP/<path>/<binary>" "$@"`, so arguments reach the binary, and must not hardcode
+  a path or flag the user chooses per run
 - For daemons: use `daemon: simple` (stays in foreground) or `daemon: forking` (calls fork/daemonizes)
 - Layouts (`layout:`) are the right tool when an app hardcodes paths like `/etc/myapp` or `/var/lib/myapp`
 - Stage packages go in `stage-packages` on the part; build-time-only packages go in `build-packages`

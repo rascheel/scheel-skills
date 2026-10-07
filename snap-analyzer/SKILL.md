@@ -12,7 +12,7 @@ description: >
 license: "Apache-2.0"
 metadata:
   author: "Canonical"
-  version: "1.3.1"
+  version: "1.4.0"
   summary: "Scans a codebase and writes snap-analysis.json — a structured packaging specification consumed by snapcraft-author, including target_arch for cross-arch builds."
   tags:
     - snap
@@ -56,7 +56,12 @@ Record findings for:
 - **Language / runtime** — Go, Python, Node.js, C/C++, Rust, Java, shell, etc.
 - **Build system** — make, cmake, meson, cargo, go build, npm/yarn, setuptools, etc.
 - **Entry points** — binary names, wrapper scripts, systemd units
-- **App type** — CLI tool, daemon, desktop GUI, or multiple
+- **App type** — command, service, desktop GUI, or several. Decide it from upstream's main
+  usage (README examples, `--help`, man pages, bundled unit files), not from what the README
+  calls the app: an app run with user-chosen arguments in the foreground is a command app,
+  and a service app needs a real signal (bundled unit or init script, documented service
+  mode, fixed startup config, or start-on-boot docs). See `references/analysis-checklist.md`
+  §4a, and record the usage in `notes[]`
 - **System resources accessed** — network sockets, filesystem paths, devices, D-Bus,
   audio, display server, secrets, hardware, etc.
 - **Hardcoded paths** — `/etc/<name>`, `/var/lib/<name>`, `/run/<name>`, etc.
@@ -234,7 +239,15 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
 ```
 
 **Field rules:**
-- `apps[].daemon`: `null` for CLI tools; `"simple"`, `"forking"`, or `"notify"` for daemons
+- `apps[].daemon`: `null` for command apps; `"simple"`, `"forking"`, or `"notify"` for service
+  apps. Follow checklist §4a: a command app by default, a service app only for a real
+  signal. When both apply, name the command app after the binary and the service app
+  `daemon`
+- `apps[].command` for a command app: the binary, or a wrapper that ends in
+  `exec "$SNAP/<path>/<binary>" "$@"`. Never hardcode a path or flag the user chooses per
+  run; describe any wrapper in `notes[]`
+- `apps[].plugs`: declare `home` / `removable-media` only on apps that can reach
+  user-chosen paths
 - `apps[].plugs`: list only interface names, not full plug definitions
 - `build.plugin_config`: plugin-specific keys (e.g. `{"go-importpath": "..."}` for the go plugin)
 - `layouts`: only include when the app hardcodes paths outside of snap-writable locations
@@ -254,7 +267,12 @@ Write the file to the project-scoped `/tmp` path (`/tmp/snap-analysis-$(basename
   directly, record it as one of `amd64`/`arm64`/`armhf`/`i386`/`ppc64el`/`s390x`/`riscv64`
 - `schema_version`: always `"1.3"`, whichever optional fields are populated
 
-Before reporting, check: if `config_options` is non-empty, `hooks` contains `configure`.
+Before reporting, check:
+- if `config_options` is non-empty, `hooks` contains `configure`;
+- every snap option is read by the upstream code or by the wrapper of a justified service
+  app, never invented for a plain command;
+- `notes[]` records upstream's main usage, and a service-only snap records why it has no
+  command app.
 
 ---
 
@@ -264,6 +282,8 @@ After writing the analysis file, summarize in the chat (state the full `/tmp` pa
 user and the `snapcraft-author` skill know where it is):
 
 - **Language / plugin** chosen and why
+- **Apps** — each app's type (command or service) and the upstream usage or service
+  signal behind it
 - **Confinement** chosen and why (especially if classic)
 - **Interfaces** listed — which auto-connect and which require `snap connect`
 - **Hooks** identified and why

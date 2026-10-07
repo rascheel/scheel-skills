@@ -35,9 +35,10 @@ apps:
       # Set runtime env vars here if the app needs them
       XDG_CONFIG_HOME: $SNAP_USER_DATA/.config
 
-  # Example daemon (background service):
-  # my-daemon:
-  #   command: bin/my-daemon
+  # Example service app, only when the analysis lists one. Alongside a command app it is
+  # named 'daemon' (systemd unit snap.my-app.daemon):
+  # daemon:
+  #   command: bin/my-app serve
   #   daemon: simple              # simple | forking | oneshot | notify
   #   restart-condition: always
   #   plugs:
