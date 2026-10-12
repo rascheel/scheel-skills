@@ -12,6 +12,17 @@ Before delegating any work, the skill SHALL confirm that `lxc` and `snapcraft` a
 - **WHEN** `snapcraft` is not on the PATH
 - **THEN** the skill stops and tells the user to run `snap install snapcraft`
 
+### Requirement: docker-to-snap availability on the OCI path
+When the OCI path is selected, the skill SHALL ensure the `docker-to-snap` tool is available, using `docker-to-snap` from the `PATH` if present, then `./docker-to-snap`, and otherwise cloning https://github.com/canonical/docker-to-snap. It MUST stop with the git error if the clone fails, and SHALL pass the resolved path to `snap-oci-analyzer`. It MUST skip this check on the source path.
+
+#### Scenario: Tool on the PATH
+- **WHEN** the OCI path is selected and `docker-to-snap` is on the `PATH`
+- **THEN** no clone is made and that path is passed to the analyzer
+
+#### Scenario: Tool not present locally
+- **WHEN** the OCI path is selected and `docker-to-snap` is on neither the `PATH` nor `./`
+- **THEN** the skill clones https://github.com/canonical/docker-to-snap and passes the resulting path to the analyzer
+
 ### Requirement: Analyzer selection
 The skill SHALL run exactly one analyzer per pipeline. It SHALL use `snap-oci-analyzer` when the input is a pre-extracted `config.json` and `rootfs/`, a `.tar` file, or a named image reference or Docker Hub URL, and use `snap-analyzer` otherwise. When the input is ambiguous (both kinds or neither) it MUST ask the user.
 

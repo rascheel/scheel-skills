@@ -4,7 +4,12 @@ Reference for preparing and invoking `docker-to-snap` to extract a Docker/OCI
 tarball into the `rootfs/`, `config.json`, `snapcraft.yaml`, and `build_scripts/`
 artifacts needed by the `snap-oci-container` skill workflow.
 
-The tool is located in the current working directory (the docker-to-snap repository root).
+The tool's source is <https://github.com/canonical/docker-to-snap>. Use `docker-to-snap` from
+the `PATH` if available, then `./docker-to-snap` if it exists in the current working
+directory (the docker-to-snap repository root); only otherwise clone the repo (`git clone https://github.com/canonical/docker-to-snap
+/tmp/docker-to-snap`) and invoke `/tmp/docker-to-snap/docker-to-snap`. The examples below
+use `./docker-to-snap` for brevity — substitute `$DOCKER_TO_SNAP` as resolved in the
+analyzer's Phase 0a.
 
 **Always use `--suppress-build`** when invoking from this skill — the build and
 confinement iteration are handled by `snap-iteration-workflow` in Phase 5.

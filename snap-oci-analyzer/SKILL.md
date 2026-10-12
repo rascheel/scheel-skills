@@ -3,7 +3,8 @@ name: snap-oci-analyzer
 description: >
   Alternative producer of snap-analysis.json for OCI/container input: Docker Hub URLs,
   image references, `docker save` tarballs, or pre-extracted `config.json` + `rootfs/`.
-  Downloads with skopeo, extracts via docker-to-snap, derives the build architecture from
+  Downloads with skopeo, extracts via docker-to-snap (https://github.com/canonical/docker-to-snap),
+  derives the build architecture from
   OCI metadata, and delegates binary analysis to analyze-binary-for-snapping. Emits the
   facts needed to package the image — interfaces, layouts, overrides, content interfaces,
   config options, system-usernames, glibc/merged-usr — as an `oci` block. Does NOT write
@@ -101,6 +102,31 @@ failed or non-apt system; `3` installed but commands/modules still missing. On a
 non-zero exit, report the exact stderr and stop — do not extract until dependencies are
 available.
 
+**Locate `docker-to-snap`.** The tool's source is
+<https://github.com/canonical/docker-to-snap>. Resolve it once and reuse `$DOCKER_TO_SNAP`
+in Phase 0c (if `snap-builder` already passed a path, use that). Check the `PATH` first,
+then `./docker-to-snap`, and clone only if neither is found:
+
+```bash
+if command -v docker-to-snap >/dev/null; then
+  DOCKER_TO_SNAP=$(command -v docker-to-snap)
+elif [ -x ./docker-to-snap ]; then
+  DOCKER_TO_SNAP=./docker-to-snap
+else
+  D2S_DIR=/tmp/docker-to-snap
+  if [ -d "$D2S_DIR/.git" ]; then
+    git -C "$D2S_DIR" pull --ff-only
+  else
+    git clone https://github.com/canonical/docker-to-snap "$D2S_DIR"
+  fi
+  DOCKER_TO_SNAP="$D2S_DIR/docker-to-snap"
+fi
+test -x "$DOCKER_TO_SNAP" || { echo "docker-to-snap not executable: $DOCKER_TO_SNAP" >&2; exit 1; }
+```
+
+Skip this if Phase 0 found pre-extracted `config.json` + `rootfs/` (Phase 0c is skipped).
+If the clone fails, report the exact git stderr and stop.
+
 ---
 
 ## Phase 0b — Download image link/reference to tarball
@@ -145,11 +171,13 @@ filename-inference rules.
   `apps[].daemon` in the output** (see Phase 5). State your reasoning to the user; only
   ask if genuinely ambiguous.
 
-**Run docker-to-snap** — always include `--suppress-build` (the pipeline builds later via
-`snapcraft-author` / `snap-validator`):
+**Run docker-to-snap** (from <https://github.com/canonical/docker-to-snap>, located in
+Phase 0a) — always include `--suppress-build` (the pipeline builds later via
+`snapcraft-author` / `snap-validator`). Run it from the project directory, invoking it via
+`$DOCKER_TO_SNAP`:
 
 ```bash
-./docker-to-snap \
+"$DOCKER_TO_SNAP" \
   --tarball <path-to-tar> \
   [--application-name <name>] \
   [--application-version <version>] \
@@ -164,7 +192,8 @@ If `docker-to-snap` reports missing tools, run `ensure_dependencies.py --install
 and retry; if it still fails, report the exact stderr and stop. On success, `cd` into the
 output folder.
 
-**Record the exact invocation** (command + flags) as
+**Record the exact invocation** (command + flags, with `$DOCKER_TO_SNAP` expanded to its
+real path) as
 `oci.reproducibility_baseline.extraction_command_recorded` — the validator replays it
 verbatim to prove the recipe reproduces from a clean extraction.
 
@@ -487,7 +516,7 @@ skill's responsibility.
 
 | File | Purpose |
 |---|---|
-| `references/docker-to-snap-options.md` | Options, defaults, filename-inference, examples for Phase 0c extraction |
+| `references/docker-to-snap-options.md` | Options, defaults, filename-inference, examples for Phase 0c extraction; tool source: https://github.com/canonical/docker-to-snap |
 | `references/glibc-compat-guide.md` | Merged-/usr + glibc detection (Phase 1c) |
 | `references/system-usernames-guide.md` | Non-root user detection / configurability (Phase 1b) |
 | `references/snap-config-guide.md` | Identifying configurable options (Phase 4c) |

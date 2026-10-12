@@ -116,6 +116,37 @@ If any are missing, note that `snap-oci-analyzer`'s Phase 0a
 (`ensure_dependencies.py --install -y`) will attempt to install them; stop only if that
 later fails.
 
+The OCI path also needs the `docker-to-snap` tool, which comes from
+<https://github.com/canonical/docker-to-snap>. Use it if `docker-to-snap` is already on the `PATH`,
+then a copy at `./docker-to-snap`; only if neither exists, clone the repo (or update an
+existing clone):
+
+```bash
+if command -v docker-to-snap >/dev/null; then
+  DOCKER_TO_SNAP=$(command -v docker-to-snap)
+elif [ -x ./docker-to-snap ]; then
+  DOCKER_TO_SNAP=./docker-to-snap
+else
+  command -v git >/dev/null || { echo "missing: git" >&2; exit 1; }
+  D2S_DIR=/tmp/docker-to-snap
+  if [ -d "$D2S_DIR/.git" ]; then
+    git -C "$D2S_DIR" pull --ff-only
+  else
+    git clone https://github.com/canonical/docker-to-snap "$D2S_DIR"
+  fi
+  DOCKER_TO_SNAP="$D2S_DIR/docker-to-snap"
+fi
+test -x "$DOCKER_TO_SNAP" || echo "docker-to-snap not found/executable at $DOCKER_TO_SNAP"
+```
+
+| Check | Failure action |
+|---|---|
+| `git` not found (and `docker-to-snap` is on neither the `PATH` nor `./`) | Stop: "git is required to fetch docker-to-snap. Install with: `sudo apt install git`" |
+| Clone fails or `docker-to-snap` is not executable afterwards | Stop and report the exact git error; point the user to <https://github.com/canonical/docker-to-snap> |
+
+Pass the resolved `$DOCKER_TO_SNAP` path to `snap-oci-analyzer` in Phase 1. Skip this
+check entirely on the source path.
+
 ### 0.3 Resolve the analysis path
 
 Resolve the analysis path once and reuse it for every phase:
@@ -143,7 +174,9 @@ Provide this context to the sub-agent:
 - Run from the current working directory (project root)
 - Goal: write the analysis to `$ANALYSIS_FILE` (`/tmp/snap-analysis-$(basename "$PWD").json`)
 - **OCI path:** also pass the input (Docker Hub URL / image reference / tarball path, or
-  the pre-extracted `config.json`+`rootfs/`) so the analyzer can download/extract.
+  the pre-extracted `config.json`+`rootfs/`) so the analyzer can download/extract, plus
+  the Phase 0.2 `$DOCKER_TO_SNAP` path (tool source:
+  <https://github.com/canonical/docker-to-snap>).
 - **Source path:** also pass the Phase 0.1a target-arch answer so it lands in the analysis's
   top-level `target_arch` field.
 

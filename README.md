@@ -8,7 +8,7 @@ A set of AI agent skills that automate the full lifecycle of packaging applicati
 |-------|---------|
 | **snap-builder** | **Start here.** Entry point for the full pipeline: analyze → package → validate → patch → rebuild (looping until clean or max iterations) |
 | **snap-analyzer** | Scans a codebase and produces `snap-analysis.json` — a structured packaging specification covering language, plugin, interfaces, hooks, and layouts |
-| **snap-oci-analyzer** | Analyzes OCI/container input and produces the same specification with OCI-specific packaging facts |
+| **snap-oci-analyzer** | Analyzes OCI/container input and produces the same specification with OCI-specific packaging facts (extracts images with [docker-to-snap](https://github.com/canonical/docker-to-snap), cloned automatically when missing) |
 | **snapcraft-author** | Pipeline stage: reads `snap-analysis.json` and generates `snap/snapcraft.yaml`, lifecycle hooks, and `SNAP_PACKAGING.md`, then builds the snap |
 | **snap-validator** | Installs the snap in a clean LXD container, exercises all apps/daemons, captures AppArmor/SecComp denials, and writes `snap-validation-results.json` |
 | **snap-trimmer** | Shrinks an already-built snap by editing `snapcraft.yaml` — finds unused libraries, base/content-snap duplicates, and over-copied build scratch, then rebuilds and verifies no regression |
